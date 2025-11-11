@@ -1,0 +1,277 @@
+package database
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/imyashkale/buildserver/internal/models"
+)
+
+// DeploymentOperations handles all DynamoDB operations for deployments
+type DeploymentOperations struct {
+	client    *Client
+	tableName string
+}
+
+// NewDeploymentOperations creates a new DeploymentOperations instance
+func NewDeploymentOperations(client *Client, tableName string) *DeploymentOperations {
+	return &DeploymentOperations{
+		client:    client,
+		tableName: tableName,
+	}
+}
+
+// CreateDeployment creates or updates a deployment in DynamoDB
+func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment *models.Deployment) error {
+	// Marshal the deployment into a DynamoDB attribute value map
+	av, err := attributevalue.MarshalMap(map[string]interface{}{
+		"serverId":    deployment.ServerId,
+		"user_id":     deployment.UserId,
+		"branch":      deployment.Branch,
+		"commit_hash": deployment.CommitHash,
+		"status":      deployment.Status,
+		"created_at":  deployment.CreatedAt.Unix(),
+		"updated_at":  deployment.UpdatedAt.Unix(),
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to marshal deployment: %w", err)
+	}
+
+	log.Println("Creating/updating deployment for server ID:", deployment.ServerId)
+
+	// Put item (will overwrite if exists with same server_id)
+	_, err = do.client.DynamoDB.PutItem(ctx, &dynamodb.PutItemInput{
+		TableName: aws.String(do.tableName),
+		Item:      av,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to create deployment: %w", err)
+	}
+
+	return nil
+}
+
+// GetDeployment retrieves a deployment by server ID and commit hash from DynamoDB
+func (do *DeploymentOperations) GetDeployment(ctx context.Context, serverId, commitHash string) (*models.Deployment, error) {
+
+	// Get the item from DynamoDB
+	result, err := do.client.DynamoDB.GetItem(ctx, &dynamodb.GetItemInput{
+		TableName: aws.String(do.tableName),
+		Key: map[string]types.AttributeValue{
+			"serverId":    &types.AttributeValueMemberS{Value: serverId},
+		},
+		
+	})
+
+	fmt.Println(" result", result)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	if result.Item == nil {
+		return nil, ErrNotFound
+	}
+
+	// Unmarshal the item into Deployment domain model
+	deployment, err := do.unmarshalDeployment(result.Item)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal deployment: %w", err)
+	}
+
+	return deployment, nil
+}
+
+// GetAllDeployments retrieves all deployments from DynamoDB
+func (do *DeploymentOperations) GetAllDeployments(ctx context.Context) ([]*models.Deployment, error) {
+	result, err := do.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
+		TableName: aws.String(do.tableName),
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan deployments: %w", err)
+	}
+
+	deployments := make([]*models.Deployment, 0, len(result.Items))
+	for _, item := range result.Items {
+		deployment, err := do.unmarshalDeployment(item)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal deployment: %w", err)
+		}
+		deployments = append(deployments, deployment)
+	}
+
+	return deployments, nil
+}
+
+// GetDeploymentsByUserId retrieves all deployments for a specific user from DynamoDB
+func (do *DeploymentOperations) GetDeploymentsByUserId(ctx context.Context, userId string) ([]*models.Deployment, error) {
+	// Use Scan with FilterExpression to filter by user_id
+	result, err := do.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
+		TableName:        aws.String(do.tableName),
+		FilterExpression: aws.String("user_id = :userId"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":userId": &types.AttributeValueMemberS{Value: userId},
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan deployments by user_id: %w", err)
+	}
+
+	deployments := make([]*models.Deployment, 0, len(result.Items))
+	for _, item := range result.Items {
+		deployment, err := do.unmarshalDeployment(item)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal deployment: %w", err)
+		}
+		deployments = append(deployments, deployment)
+	}
+
+	return deployments, nil
+}
+
+// GetDeploymentsByUserIdAndServerId retrieves all deployments for a specific user and server from DynamoDB
+func (do *DeploymentOperations) GetDeploymentsByUserIdAndServerId(ctx context.Context, userId, serverId string) ([]*models.Deployment, error) {
+	// Use Scan with FilterExpression to filter by both user_id and serverId
+	result, err := do.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
+		TableName:        aws.String(do.tableName),
+		FilterExpression: aws.String("user_id = :userId AND serverId = :serverId"),
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":userId":   &types.AttributeValueMemberS{Value: userId},
+			":serverId": &types.AttributeValueMemberS{Value: serverId},
+		},
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan deployments by user_id and serverId: %w", err)
+	}
+
+	deployments := make([]*models.Deployment, 0, len(result.Items))
+	for _, item := range result.Items {
+		deployment, err := do.unmarshalDeployment(item)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal deployment: %w", err)
+		}
+		deployments = append(deployments, deployment)
+	}
+
+	return deployments, nil
+}
+
+// UpdateDeploymentStatus updates the status of a deployment
+func (do *DeploymentOperations) UpdateDeploymentStatus(ctx context.Context, serverId, status string) error {
+	_, err := do.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(do.tableName),
+		Key: map[string]types.AttributeValue{
+			"server_id": &types.AttributeValueMemberS{Value: serverId},
+		},
+		UpdateExpression: aws.String("SET #status = :status, updated_at = :updated_at"),
+		ExpressionAttributeNames: map[string]string{
+			"#status": "status",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":status":     &types.AttributeValueMemberS{Value: status},
+			":updated_at": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", time.Now().Unix())},
+		},
+		ConditionExpression: aws.String("attribute_exists(server_id)"),
+	})
+
+	if err != nil {
+		var ccf *types.ConditionalCheckFailedException
+		if errors.As(err, &ccf) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("failed to update deployment status: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateDeployment updates a deployment with all fields including stages and logs
+func (do *DeploymentOperations) UpdateDeployment(ctx context.Context, deployment *models.Deployment) error {
+	// Prepare the attributes to update
+	updateExpr := "SET #status = :status, #stages = :stages, #logs = :logs, #imageUri = :imageUri, updated_at = :updated_at"
+	exprAttrNames := map[string]string{
+		"#status":   "status",
+		"#stages":   "stages",
+		"#logs":     "logs",
+		"#imageUri": "image_uri",
+	}
+
+	// Convert stages to DynamoDB attribute values
+	stagesAv, _ := attributevalue.Marshal(deployment.Stages)
+	logsAv, _ := attributevalue.Marshal(deployment.BuildLogs)
+
+	exprAttrVals := map[string]types.AttributeValue{
+		":status":     &types.AttributeValueMemberS{Value: deployment.Status},
+		":stages":     stagesAv,
+		":logs":       logsAv,
+		":imageUri":   &types.AttributeValueMemberS{Value: deployment.ImageURI},
+		":updated_at": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", deployment.UpdatedAt.Unix())},
+	}
+
+	_, err := do.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(do.tableName),
+		Key: map[string]types.AttributeValue{
+			"serverId":    &types.AttributeValueMemberS{Value: deployment.ServerId},
+			"commit_hash": &types.AttributeValueMemberS{Value: deployment.CommitHash},
+		},
+		UpdateExpression:       aws.String(updateExpr),
+		ExpressionAttributeNames: exprAttrNames,
+		ExpressionAttributeValues: exprAttrVals,
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to update deployment: %w", err)
+	}
+
+	return nil
+}
+
+// unmarshalDeployment is a helper function to unmarshal DynamoDB item to Deployment domain model
+func (do *DeploymentOperations) unmarshalDeployment(item map[string]types.AttributeValue) (*models.Deployment, error) {
+	// Unmarshal into a temporary struct to handle custom conversions
+	var temp struct {
+		ServerId   string                       `dynamodbav:"serverId"`
+		UserId     string                       `dynamodbav:"user_id"`
+		Branch     string                       `dynamodbav:"branch"`
+		CommitHash string                       `dynamodbav:"commit_hash"`
+		Status     string                       `dynamodbav:"status"`
+		Stages     map[string]*models.BuildStageStatus `dynamodbav:"stages"`
+		BuildLogs  []models.BuildLogEntry       `dynamodbav:"logs"`
+		ImageURI   string                       `dynamodbav:"image_uri"`
+		CreatedAt  int64                        `dynamodbav:"created_at"`
+		UpdatedAt  int64                        `dynamodbav:"updated_at"`
+	}
+
+	err := attributevalue.UnmarshalMap(item, &temp)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to domain model with proper time.Time conversion
+	deployment := &models.Deployment{
+		ServerId:   temp.ServerId,
+		UserId:     temp.UserId,
+		Branch:     temp.Branch,
+		CommitHash: temp.CommitHash,
+		Status:     temp.Status,
+		Stages:     temp.Stages,
+		BuildLogs:  temp.BuildLogs,
+		ImageURI:   temp.ImageURI,
+		CreatedAt:  time.Unix(temp.CreatedAt, 0),
+		UpdatedAt:  time.Unix(temp.UpdatedAt, 0),
+	}
+
+	return deployment, nil
+}
