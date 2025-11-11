@@ -40,15 +40,17 @@ func (ms *MCPServer) CreateMCP(ctx context.Context, server *models.MCPServer) er
 
 	// Marshal the MCP server into a DynamoDB attribute value map
 	av, err := attributevalue.MarshalMap(map[string]interface{}{
-		"id":          server.Id,
-		"user_id":     server.UserId,
-		"name":        server.Name,
-		"description": server.Description,
-		"repository":  server.Repository,
-		"status":      server.Status,
-		"envs":        server.EnvironmentVariables,
-		"created_at":  server.CreatedAt.Unix(),
-		"updated_at":  server.UpdatedAt.Unix(),
+		"id":              server.Id,
+		"user_id":         server.UserId,
+		"name":            server.Name,
+		"description":     server.Description,
+		"repository":      server.Repository,
+		"status":          server.Status,
+		"envs":            server.EnvironmentVariables,
+		"ecr_repo_name":   server.ECRRepositoryName,
+		"ecr_repo_uri":    server.ECRRepositoryURI,
+		"created_at":      server.CreatedAt.Unix(),
+		"updated_at":      server.UpdatedAt.Unix(),
 	})
 
 	if err != nil {
@@ -152,6 +154,47 @@ func (ms *MCPServer) GetMCPsByUserId(ctx context.Context, userId string) ([]*mod
 	return servers, nil
 }
 
+// UpdateMCP updates an existing MCP server in DynamoDB
+func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) error {
+	// Update the MCP server using UpdateItem
+	_, err := ms.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+		TableName: aws.String(ms.tableName),
+		Key: map[string]types.AttributeValue{
+			"id": &types.AttributeValueMemberS{Value: server.Id},
+		},
+		UpdateExpression: aws.String("SET #name = :name, #desc = :desc, #repo = :repo, #status = :status, #envs = :envs, #ecrRepoName = :ecrRepoName, #ecrRepoURI = :ecrRepoURI, updated_at = :updated_at"),
+		ExpressionAttributeNames: map[string]string{
+			"#name":          "name",
+			"#desc":          "description",
+			"#repo":          "repository",
+			"#status":        "status",
+			"#envs":          "envs",
+			"#ecrRepoName":   "ecr_repo_name",
+			"#ecrRepoURI":    "ecr_repo_uri",
+		},
+		ExpressionAttributeValues: map[string]types.AttributeValue{
+			":name":          &types.AttributeValueMemberS{Value: server.Name},
+			":desc":          &types.AttributeValueMemberS{Value: server.Description},
+			":repo":          &types.AttributeValueMemberS{Value: server.Repository},
+			":status":        &types.AttributeValueMemberS{Value: server.Status},
+			":updated_at":    &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", server.UpdatedAt.Unix())},
+			":ecrRepoName":   &types.AttributeValueMemberS{Value: server.ECRRepositoryName},
+			":ecrRepoURI":    &types.AttributeValueMemberS{Value: server.ECRRepositoryURI},
+		},
+	})
+
+
+	if err != nil {
+		var ccf *types.ConditionalCheckFailedException
+		if errors.As(err, &ccf) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("failed to update MCP server: %w", err)
+	}
+
+	return nil
+}
+
 // DeleteMCP deletes an MCP server from DynamoDB
 func (ops *MCPServer) DeleteMCP(ctx context.Context, id string) error {
 	_, err := ops.client.DynamoDB.DeleteItem(ctx, &dynamodb.DeleteItemInput{
@@ -201,6 +244,8 @@ func (ops *MCPServer) unmarshalMCPServer(item map[string]types.AttributeValue) (
 		Repository           string                       `dynamodbav:"repository"`
 		Status               string                       `dynamodbav:"status"`
 		EnvironmentVariables []models.EnvironmentVariable `dynamodbav:"envs"`
+		ECRRepositoryName    string                       `dynamodbav:"ecr_repo_name"`
+		ECRRepositoryURI     string                       `dynamodbav:"ecr_repo_uri"`
 		CreatedAt            int64                        `dynamodbav:"created_at"`
 		UpdatedAt            int64                        `dynamodbav:"updated_at"`
 	}
@@ -219,6 +264,8 @@ func (ops *MCPServer) unmarshalMCPServer(item map[string]types.AttributeValue) (
 		Repository:           temp.Repository,
 		Status:               temp.Status,
 		EnvironmentVariables: temp.EnvironmentVariables,
+		ECRRepositoryName:    temp.ECRRepositoryName,
+		ECRRepositoryURI:     temp.ECRRepositoryURI,
 		CreatedAt:            time.Unix(temp.CreatedAt, 0),
 		UpdatedAt:            time.Unix(temp.UpdatedAt, 0),
 	}

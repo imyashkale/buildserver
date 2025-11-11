@@ -20,6 +20,7 @@ type MCPRepository interface {
 	GetAll(ctx context.Context) ([]*models.MCPServer, error)
 	GetByID(ctx context.Context, id string) (*models.MCPServer, error)
 	GetByUserId(ctx context.Context, userId string) ([]*models.MCPServer, error)
+	Update(ctx context.Context, server *models.MCPServer) error
 	Delete(ctx context.Context, id string) error
 }
 
@@ -58,6 +59,11 @@ func (r *dynamoMCPRepository) GetByID(ctx context.Context, id string) (*models.M
 // GetByUserId retrieves all MCP servers for a specific user
 func (r *dynamoMCPRepository) GetByUserId(ctx context.Context, userId string) ([]*models.MCPServer, error) {
 	return r.db.GetMCPsByUserId(ctx, userId)
+}
+
+// Update updates an existing MCP server
+func (r *dynamoMCPRepository) Update(ctx context.Context, server *models.MCPServer) error {
+	return r.db.UpdateMCP(ctx, server)
 }
 
 // Delete deletes an MCP server by ID

@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -21,15 +22,18 @@ type ECRService struct {
 }
 
 // NewECRService creates a new ECR service
-func NewECRService(cfg aws.Config) *ECRService {
-	ecrClient := ecr.NewFromConfig(cfg)
-	accountID := os.Getenv("AWS_ACCOUNT_ID")
+func NewECRService(awsCfg aws.Config, accountID string) *ECRService {
+	ecrClient := ecr.NewFromConfig(awsCfg)
 
-	return &ECRService{
+	ecrService := &ECRService{
 		ecrClient: ecrClient,
-		region:    cfg.Region,
+		region:    awsCfg.Region,
 		accountID: accountID,
 	}
+
+	log.Printf("ECR Service initialized - Account ID: %s, Region: %s", accountID, awsCfg.Region)
+
+	return ecrService
 }
 
 // GetOrCreateRepository gets or creates an ECR repository for the server
@@ -77,7 +81,20 @@ func (es *ECRService) GetRepositoryURI(repoName string) string {
 //   - imageName: local Docker image name (e.g., "server-id:commit-hash")
 //   - tags: list of tags to apply (e.g., ["latest", "branch-commit"])
 func (es *ECRService) PushImage(ctx context.Context, repoName, imageName string, tags []string) (string, error) {
+	if len(tags) == 0 {
+		return "", fmt.Errorf("at least one tag must be provided")
+	}
+
 	repoURI := es.GetRepositoryURI(repoName)
+
+	// Validate inputs
+	if imageName == "" {
+		return "", fmt.Errorf("image name cannot be empty")
+	}
+
+	if repoName == "" {
+		return "", fmt.Errorf("repository name cannot be empty")
+	}
 
 	// Login to ECR (requires AWS CLI installed)
 	if err := es.loginToECR(ctx); err != nil {
@@ -87,15 +104,22 @@ func (es *ECRService) PushImage(ctx context.Context, repoName, imageName string,
 	// Tag the image for ECR
 	for _, tag := range tags {
 		fullImageName := fmt.Sprintf("%s:%s", repoURI, tag)
+		log.Printf("Tagging Docker image: %s -> %s", imageName, fullImageName)
+
 		cmd := exec.CommandContext(ctx, "docker", "tag", imageName, fullImageName)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
 		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to tag Docker image: %w", err)
+			return "", fmt.Errorf("failed to tag Docker image %s as %s: %w", imageName, fullImageName, err)
 		}
 	}
 
 	// Push the image
 	for _, tag := range tags {
 		fullImageName := fmt.Sprintf("%s:%s", repoURI, tag)
+		log.Printf("Pushing Docker image: %s", fullImageName)
+
 		cmd := exec.CommandContext(ctx, "docker", "push", fullImageName)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
@@ -106,11 +130,9 @@ func (es *ECRService) PushImage(ctx context.Context, repoName, imageName string,
 	}
 
 	// Return the primary image URI (first tag or "latest")
-	if len(tags) > 0 {
-		return fmt.Sprintf("%s:%s", repoURI, tags[0]), nil
-	}
-
-	return fmt.Sprintf("%s:latest", repoURI), nil
+	primaryImageURI := fmt.Sprintf("%s:%s", repoURI, tags[0])
+	log.Printf("Successfully pushed image: %s", primaryImageURI)
+	return primaryImageURI, nil
 }
 
 // loginToECR authenticates with ECR
@@ -128,11 +150,19 @@ func (es *ECRService) loginToECR(ctx context.Context) error {
 	authData := authOutput.AuthorizationData[0]
 
 	// Extract username and password from authorization token
-	// Token format is: username:password in base64
-	decodedToken := *authData.AuthorizationToken
+	// Token format is: base64(username:password)
+	encodedToken := *authData.AuthorizationToken
+
+	// Decode the base64 token
+	decodedBytes, err := base64.StdEncoding.DecodeString(encodedToken)
+	if err != nil {
+		return fmt.Errorf("failed to decode authorization token: %w", err)
+	}
+
+	decodedToken := string(decodedBytes)
 	parts := strings.Split(decodedToken, ":")
 	if len(parts) < 2 {
-		return fmt.Errorf("invalid authorization token format")
+		return fmt.Errorf("invalid authorization token format: expected username:password")
 	}
 
 	username := parts[0]

@@ -10,11 +10,11 @@ import (
 // DeploymentRepository defines the interface for deployment operations
 type DeploymentRepository interface {
 	Create(ctx context.Context, deployment *models.Deployment) error
-	Get(ctx context.Context, serverId, commitHash string) (*models.Deployment, error)
+	Get(ctx context.Context, serverId, deploymentId string) (*models.Deployment, error)
 	GetAll(ctx context.Context) ([]*models.Deployment, error)
 	GetByUserId(ctx context.Context, userId string) ([]*models.Deployment, error)
 	GetByUserIdAndServerId(ctx context.Context, userId, serverId string) ([]*models.Deployment, error)
-	UpdateStatus(ctx context.Context, serverId, status string) error
+	UpdateStatus(ctx context.Context, serverId, deploymentId, status string) error
 	Update(ctx context.Context, deployment *models.Deployment) error
 }
 
@@ -36,8 +36,8 @@ func (r *dynamoDeploymentRepository) Create(ctx context.Context, deployment *mod
 }
 
 // Get retrieves a deployment by server ID and commit hash
-func (r *dynamoDeploymentRepository) Get(ctx context.Context, serverId, commitHash string) (*models.Deployment, error) {
-	return r.db.GetDeployment(ctx, serverId, commitHash)
+func (r *dynamoDeploymentRepository) Get(ctx context.Context, serverId, deploymentId string) (*models.Deployment, error) {
+	return r.db.GetDeployment(ctx, serverId, deploymentId)
 }
 
 // GetAll retrieves all deployments
@@ -56,8 +56,8 @@ func (r *dynamoDeploymentRepository) GetByUserIdAndServerId(ctx context.Context,
 }
 
 // UpdateStatus updates the status of a deployment
-func (r *dynamoDeploymentRepository) UpdateStatus(ctx context.Context, serverId, status string) error {
-	return r.db.UpdateDeploymentStatus(ctx, serverId, status)
+func (r *dynamoDeploymentRepository) UpdateStatus(ctx context.Context, serverId, deploymentId, status string) error {
+	return r.db.UpdateDeploymentStatus(ctx, serverId, deploymentId, status)
 }
 
 // Update updates a deployment record with all fields

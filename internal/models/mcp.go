@@ -12,6 +12,8 @@ type MCPServer struct {
 	Repository           string
 	Status               string // e.g., "active", "inactive", "deploying", "failed"
 	EnvironmentVariables []EnvironmentVariable
+	ECRRepositoryName    string // ECR repository name (e.g., "mcp-server-id")
+	ECRRepositoryURI     string // Full ECR repository URI (e.g., "123456789.dkr.ecr.us-east-1.amazonaws.com/mcp-server-id")
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }

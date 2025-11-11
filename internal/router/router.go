@@ -9,10 +9,6 @@ import (
 // Setup configures and returns the application router
 func Setup(
 	healthHandler *handlers.HealthHandler,
-	mcpHandler *handlers.MCPHandler,
-	authHandler *handlers.AuthHandler,
-	githubHandler *handlers.GitHubHandler,
-	deploymentHandler *handlers.DeploymentHandler,
 	buildHandler *handlers.BuildHandler,
 ) *gin.Engine {
 

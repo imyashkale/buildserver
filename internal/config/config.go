@@ -13,9 +13,12 @@ type Config struct {
 	// Server configuration
 	Port string
 
+	// AWS configuration
+	AWSRegion     string
+	AWSAccountID  string
+
 	// DynamoDB configuration
 	DynamoDBTableName          string
-	AWSRegion                  string
 	GitHubConnectionsTableName string
 	GitHubOAuthStatesTableName string
 	DeploymentsTableName       string
@@ -45,9 +48,12 @@ func New() *Config {
 		// Server configuration
 		Port: getEnvOrDefault("PORT", "3001"),
 
+		// AWS configuration
+		AWSRegion:    getEnvOrDefault("AWS_REGION", "us-east-1"),
+		AWSAccountID: os.Getenv("AWS_ACCOUNT_ID"),
+
 		// DynamoDB configuration
 		DynamoDBTableName:          getEnvOrDefault("DYNAMODB_TABLE_NAME", "mcp-servers"),
-		AWSRegion:                  getEnvOrDefault("AWS_REGION", "us-east-1"),
 		GitHubConnectionsTableName: getEnvOrDefault("GITHUB_CONNECTIONS_TABLE_NAME", "github-connections"),
 		GitHubOAuthStatesTableName: getEnvOrDefault("GITHUB_OAUTH_STATES_TABLE_NAME", "github-oauth-states"),
 		DeploymentsTableName:       getEnvOrDefault("DYNAMODB_DEPLOYMENTS_TABLE", "deployments"),
@@ -73,6 +79,11 @@ func New() *Config {
 func (c *Config) validate() {
 	var missing []string
 
+	// Check required AWS configuration
+	if c.AWSAccountID == "" {
+		missing = append(missing, "AWS_ACCOUNT_ID")
+	}
+
 	// Check required GitHub OAuth configuration
 	if c.GitHubClientID == "" {
 		missing = append(missing, "GITHUB_CLIENT_ID")
@@ -92,6 +103,21 @@ func (c *Config) validate() {
 	if len(c.GitHubTokenEncryptionKey) != 32 {
 		panic(fmt.Sprintf("GITHUB_TOKEN_ENCRYPTION_KEY must be exactly 32 characters (got %d)", len(c.GitHubTokenEncryptionKey)))
 	}
+
+	// Validate AWS Account ID format (should be 12 digits)
+	if len(c.AWSAccountID) != 12 || !isNumeric(c.AWSAccountID) {
+		panic(fmt.Sprintf("AWS_ACCOUNT_ID must be exactly 12 digits (got '%s')", c.AWSAccountID))
+	}
+}
+
+// isNumeric checks if a string contains only numeric characters
+func isNumeric(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // getEnvOrDefault returns the value of an environment variable or a default value
@@ -112,6 +138,11 @@ func (c *Config) GetPort() string {
 // GetAWSRegion returns the AWS region
 func (c *Config) GetAWSRegion() string {
 	return c.AWSRegion
+}
+
+// GetAWSAccountID returns the AWS account ID
+func (c *Config) GetAWSAccountID() string {
+	return c.AWSAccountID
 }
 
 // GetDynamoDBTableName returns the main DynamoDB table name

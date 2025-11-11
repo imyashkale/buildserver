@@ -77,7 +77,7 @@ func main() {
 	}
 
 	// Initialize ECR service
-	ecrService := services.NewECRService(awsCfg)
+	ecrService := services.NewECRService(awsCfg, cfg.AWSAccountID)
 	log.Println("ECR service initialized")
 
 	// Initialize pipeline service
@@ -96,15 +96,18 @@ func main() {
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler()
-	mcpHandler := handlers.NewMCPHandler(mrepo)
-	authHandler := handlers.NewAuthHandler(githubRepo, githubService)
-	githubHandler := handlers.NewGitHubHandler(githubRepo, mrepo, githubService)
-	deploymentHandler := handlers.NewDeploymentHandler(deploymentRepo)
-	buildHandler := handlers.NewBuildHandler(mrepo, deploymentRepo, githubRepo, githubService, pipelineService, jobQueue)
+	buildHandler := handlers.NewBuildHandler(
+		mrepo,
+		deploymentRepo,
+		githubRepo,
+		githubService,
+		pipelineService,
+		jobQueue,
+	)
 	log.Println("Handlers initialized")
 
 	// Setup router
-	r := router.Setup(healthHandler, mcpHandler, authHandler, githubHandler, deploymentHandler, buildHandler)
+	r := router.Setup(healthHandler, buildHandler)
 
 	// Setup graceful shutdown
 	go func() {

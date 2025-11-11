@@ -1,7 +1,6 @@
 package services
 
 import (
-	"bytes"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -15,7 +14,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/imyashkale/buildserver/internal/models"
 	"github.com/imyashkale/buildserver/internal/repository"
 )
@@ -54,36 +52,6 @@ func NewGitHubService(
 	}
 }
 
-// GenerateAuthURL generates a GitHub OAuth authorization URL with state token
-func (s *GitHubService) GenerateAuthURL(ctx context.Context, userId string) (string, string, error) {
-	// Generate secure state token
-	stateToken := uuid.New().String()
-
-	// Create OAuth state record
-	oauthState := &models.OAuthState{
-		Id:         uuid.New().String(),
-		UserId:     userId,
-		StateToken: stateToken,
-		CreatedAt:  time.Now(),
-		ExpiresAt:  time.Now().Add(15 * time.Minute),
-	}
-
-	// Save state to database
-	if err := s.repo.CreateOAuthState(ctx, oauthState); err != nil {
-		return "", "", fmt.Errorf("failed to create oauth state: %w", err)
-	}
-
-	// Build authorization URL
-	authURL := fmt.Sprintf(
-		"https://github.com/login/oauth/authorize?client_id=%s&state=%s&redirect_uri=%s&scope=repo,user",
-		s.clientID,
-		stateToken,
-		url.QueryEscape(s.redirectURL),
-	)
-
-	return authURL, stateToken, nil
-}
-
 // VerifyStateToken verifies the OAuth state token
 func (s *GitHubService) VerifyStateToken(ctx context.Context, stateToken string, userId string) error {
 
@@ -114,58 +82,6 @@ func (s *GitHubService) VerifyStateToken(ctx context.Context, stateToken string,
 	}
 
 	return nil
-}
-
-// ExchangeCodeForToken exchanges the authorization code for an access token
-func (s *GitHubService) ExchangeCodeForToken(ctx context.Context, code string) (string, error) {
-	// Prepare request to exchange code for token
-	data := url.Values{}
-	data.Set("client_id", s.clientID)
-	data.Set("client_secret", s.clientSecret)
-	data.Set("code", code)
-	data.Set("redirect_uri", s.redirectURL)
-
-	req, err := http.NewRequestWithContext(
-		ctx,
-		"POST",
-		"https://github.com/login/oauth/access_token",
-		nil,
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.URL.RawQuery = data.Encode()
-	req.Header.Set("Accept", "application/json")
-
-	// Send request
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to exchange code: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("%w: status code %d", ErrGitHubAPIError, resp.StatusCode)
-	}
-
-	// Parse response
-	var result struct {
-		AccessToken string `json:"access_token"`
-		Error       string `json:"error"`
-		ErrorDesc   string `json:"error_description"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	if result.Error != "" {
-		return "", fmt.Errorf("%w: %s - %s", ErrGitHubAPIError, result.Error, result.ErrorDesc)
-	}
-
-	return result.AccessToken, nil
 }
 
 // GetGitHubUser fetches user information from GitHub API
@@ -279,43 +195,6 @@ func (s *GitHubService) SearchUserRepositories(ctx context.Context, accessToken,
 	}
 
 	return result.Items, nil
-}
-
-// RevokeGitHubToken revokes a GitHub access token
-func (s *GitHubService) RevokeGitHubToken(ctx context.Context, accessToken string) error {
-	url := fmt.Sprintf("https://api.github.com/applications/%s/token", s.clientID)
-
-	reqBody := map[string]string{
-		"access_token": accessToken,
-	}
-	bodyBytes, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request body: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Use basic auth with client credentials
-	req.SetBasicAuth(s.clientID, s.clientSecret)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Body = io.NopCloser(bytes.NewReader(bodyBytes))
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to revoke token: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		return fmt.Errorf("%w: status code %d", ErrGitHubAPIError, resp.StatusCode)
-	}
-
-	return nil
 }
 
 // EncryptToken encrypts a token using AES-256

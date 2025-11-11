@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -45,6 +46,7 @@ func NewBuildHandler(
 
 // InitiateBuild handles initiating a new build asynchronously
 func (h *BuildHandler) InitiateBuild(c *gin.Context) {
+
 	// Get user ID from context (set by auth middleware)
 	userId, exists := c.Get("user_id")
 	if !exists {
@@ -55,6 +57,9 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		return
 	}
 
+	log.Printf("InitiateBuild called by user: %v", userId)
+	
+	// Validate user ID
 	userIdStr, ok := userId.(string)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -63,6 +68,8 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		})
 		return
 	}
+
+	log.Printf("User ID validated: %s", userIdStr)
 
 	// Get server ID and deployment ID from URL parameters
 	serverId := c.Param("server_id")
@@ -84,6 +91,8 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		return
 	}
 
+	fmt.Println("Got the serverId and deploymentId", deploymentId, serverId)
+
 	ctx := c.Request.Context()
 
 	// Validate GitHub connection
@@ -96,6 +105,8 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		return
 	}
 
+	fmt.Println("Connected to github ", githubConn.ConnectedAt)
+
 	// Validate MCP server
 	mcp, err := h.mcpRepo.Get(ctx, serverId)
 	if err != nil || mcp == nil {
@@ -105,6 +116,8 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		})
 		return
 	}
+
+	fmt.Println("Getting the mcp", mcp.Id, mcp.Name)
 
 	if mcp.UserId != userIdStr {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -123,6 +136,8 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		})
 		return
 	}
+
+	fmt.Println("Getting the deployment", deployment.DeploymentId, deployment.ServerId)
 
 	if deployment.UserId != userIdStr {
 		c.JSON(http.StatusForbidden, gin.H{
@@ -235,41 +250,9 @@ func (h *BuildHandler) GetBuildDetails(c *gin.Context) {
 	})
 }
 
-// cloneRepository clones a git repository at a specific branch and commit
-func (h *BuildHandler) cloneRepository(repoURL, branch, commitHash, targetDir, accessToken string) error {
-	// Parse repository URL and inject GitHub token for authentication
-	authenticatedURL := h.injectGitHubToken(repoURL, accessToken)
-
-	// Clone the repository with logging
-	fmt.Printf("Cloning repository from branch %s to %s\n", branch, targetDir)
-	cmd := exec.Command("git", "clone", "-b", branch, authenticatedURL, targetDir)
-	output, err := cmd.CombinedOutput()
-	if output != nil {
-		fmt.Printf("Git clone output:\n%s\n", string(output))
-	}
-	if err != nil {
-		fmt.Printf("Git clone failed with error: %v\n", err)
-		return fmt.Errorf("git clone failed: %w", err)
-	}
-
-	// Checkout specific commit with logging
-	fmt.Printf("Checking out commit %s\n", commitHash)
-	cmd = exec.Command("git", "-C", targetDir, "checkout", commitHash)
-	output, err = cmd.CombinedOutput()
-	if output != nil {
-		fmt.Printf("Git checkout output:\n%s\n", string(output))
-	}
-	if err != nil {
-		fmt.Printf("Git checkout failed with error: %v\n", err)
-		return fmt.Errorf("git checkout failed: %w", err)
-	}
-
-	fmt.Printf("Repository cloned and checked out successfully\n")
-	return nil
-}
-
 // injectGitHubToken adds GitHub authentication to repository URL
 func (h *BuildHandler) injectGitHubToken(repoURL, token string) string {
+
 	// Handle HTTPS URLs
 	if len(repoURL) > 8 && repoURL[:8] == "https://" {
 		return fmt.Sprintf("https://x-access-token:%s@%s", token, repoURL[8:])

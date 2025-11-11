@@ -67,10 +67,14 @@ func (ps *PipelineService) ExecuteBuild(ctx context.Context, job *queue.BuildJob
 		return fmt.Errorf("deployment not found")
 	}
 
+	// Log deployment details
+	fmt.Println("Deployment queried: ", deployment.DeploymentId, deployment.ServerId, deployment.CommitHash)
+
 	deployment.Stages = stages
 	deployment.Status = "in_progress"
 	deployment.BuildLogs = ps.logger.GetLogs()
 
+	// Update deployment with initialized stages
 	if err := ps.updateDeployment(ctx, deployment); err != nil {
 		ps.logger.LogError("init", fmt.Sprintf("Failed to update deployment: %v", err))
 		return err
@@ -115,13 +119,19 @@ func (ps *PipelineService) ExecuteBuild(ctx context.Context, job *queue.BuildJob
 	defer os.RemoveAll(tempDir)
 
 	// Stage 5: Create/Verify ECR Repository
-	repoName, err := ps.stageCreateECR(ctx, job, deployment)
+	repoName, repoURI, err := ps.stageCreateECR(ctx, job, deployment)
 	if err != nil {
 		ps.markStageFailed(ctx, deployment, "create_ecr", err)
 		return err
 	}
 
 	ps.markStageCompleted(ctx, deployment, "create_ecr")
+
+	// Update MCP with ECR repository information
+	if err := ps.updateMCPWithECRRepo(ctx, job.ServerID, repoName, repoURI); err != nil {
+		ps.logger.LogError("create_ecr", fmt.Sprintf("Failed to update MCP with ECR repo info: %v", err))
+		// Log warning but don't fail the build - ECR repo was created successfully
+	}
 
 	// Stage 6: Push Image to ECR
 	imageURI, err := ps.stagePushImage(ctx, job, deployment, imageName, repoName)
@@ -224,18 +234,18 @@ func (ps *PipelineService) stageBuildImage(ctx context.Context, job *queue.Build
 }
 
 // stageCreateECR creates or verifies ECR repository
-func (ps *PipelineService) stageCreateECR(ctx context.Context, job *queue.BuildJob, deployment *models.Deployment) (string, error) {
+func (ps *PipelineService) stageCreateECR(ctx context.Context, job *queue.BuildJob, deployment *models.Deployment) (string, string, error) {
 	ps.logger.LogInfo("create_ecr", fmt.Sprintf("Creating/verifying ECR repository for server %s", job.ServerID))
 
 	repoName, err := ps.ecrService.GetOrCreateRepository(ctx, job.ServerID)
 	if err != nil {
 		ps.logger.LogError("create_ecr", fmt.Sprintf("Failed to create ECR repository: %v", err))
-		return "", err
+		return "", "", err
 	}
 
 	repoURI := ps.ecrService.GetRepositoryURI(repoName)
 	ps.logger.LogInfo("create_ecr", fmt.Sprintf("ECR repository ready: %s", repoURI))
-	return repoName, nil
+	return repoName, repoURI, nil
 }
 
 // stagePushImage pushes the Docker image to ECR
@@ -367,6 +377,27 @@ func (ps *PipelineService) buildDockerImage(repoDir, imageName string) error {
 	cmd := exec.Command("docker", "build", "-t", imageName, repoDir)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("docker build failed: %w", err)
+	}
+
+	return nil
+}
+
+// updateMCPWithECRRepo updates the MCP with ECR repository information
+func (ps *PipelineService) updateMCPWithECRRepo(ctx context.Context, serverID, repoName, repoURI string) error {
+	// Get the MCP server
+	mcp, err := ps.mcpRepo.Get(ctx, serverID)
+	if err != nil || mcp == nil {
+		return fmt.Errorf("failed to get MCP server: %w", err)
+	}
+
+	// Update ECR repository information
+	mcp.ECRRepositoryName = repoName
+	mcp.ECRRepositoryURI = repoURI
+	mcp.UpdatedAt = time.Now()
+
+	// Save the updated MCP
+	if err := ps.mcpRepo.Update(ctx, mcp); err != nil {
+		return fmt.Errorf("failed to update MCP with ECR repo info: %w", err)
 	}
 
 	return nil
