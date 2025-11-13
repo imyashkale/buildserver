@@ -32,14 +32,14 @@ func NewDeploymentOperations(client *Client, tableName string) *DeploymentOperat
 func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment *models.Deployment) error {
 	// Marshal the deployment into a DynamoDB attribute value map
 	av, err := attributevalue.MarshalMap(map[string]interface{}{
-		"serverId":     deployment.ServerId,
-		"deploymentId": deployment.DeploymentId,
-		"user_id":      deployment.UserId,
-		"branch":       deployment.Branch,
-		"commit_hash":  deployment.CommitHash,
-		"status":       deployment.Status,
-		"created_at":   deployment.CreatedAt.Unix(),
-		"updated_at":   deployment.UpdatedAt.Unix(),
+		"ServerId":     deployment.ServerId,
+		"DeploymentId": deployment.DeploymentId,
+		"UserId":       deployment.UserId,
+		"Branch":       deployment.Branch,
+		"CommitHash":   deployment.CommitHash,
+		"Status":       deployment.Status,
+		"CreatedAt":    deployment.CreatedAt.Unix(),
+		"UpdatedAt":    deployment.UpdatedAt.Unix(),
 	})
 
 	if err != nil {
@@ -64,11 +64,11 @@ func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment
 // GetDeployment retrieves a deployment by server ID and deployment ID from DynamoDB
 func (do *DeploymentOperations) GetDeployment(ctx context.Context, serverId, deploymentId string) (*models.Deployment, error) {
 
-	// Query by serverId (partition key) and filter by deploymentId
+	// Query by ServerId (partition key) and filter by DeploymentId
 	result, err := do.client.DynamoDB.Query(ctx, &dynamodb.QueryInput{
-		TableName:            aws.String(do.tableName),
-		KeyConditionExpression: aws.String("serverId = :serverId"),
-		FilterExpression:     aws.String("deploymentId = :deploymentId"),
+		TableName:              aws.String(do.tableName),
+		KeyConditionExpression: aws.String("ServerId = :serverId"),
+		FilterExpression:       aws.String("DeploymentId = :deploymentId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":serverId":     &types.AttributeValueMemberS{Value: serverId},
 			":deploymentId": &types.AttributeValueMemberS{Value: deploymentId},
@@ -116,10 +116,10 @@ func (do *DeploymentOperations) GetAllDeployments(ctx context.Context) ([]*model
 
 // GetDeploymentsByUserId retrieves all deployments for a specific user from DynamoDB
 func (do *DeploymentOperations) GetDeploymentsByUserId(ctx context.Context, userId string) ([]*models.Deployment, error) {
-	// Use Scan with FilterExpression to filter by user_id
+	// Use Scan with FilterExpression to filter by UserId
 	result, err := do.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
 		TableName:        aws.String(do.tableName),
-		FilterExpression: aws.String("user_id = :userId"),
+		FilterExpression: aws.String("UserId = :userId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":userId": &types.AttributeValueMemberS{Value: userId},
 		},
@@ -143,10 +143,10 @@ func (do *DeploymentOperations) GetDeploymentsByUserId(ctx context.Context, user
 
 // GetDeploymentsByUserIdAndServerId retrieves all deployments for a specific user and server from DynamoDB
 func (do *DeploymentOperations) GetDeploymentsByUserIdAndServerId(ctx context.Context, userId, serverId string) ([]*models.Deployment, error) {
-	// Use Scan with FilterExpression to filter by both user_id and serverId
+	// Use Scan with FilterExpression to filter by both UserId and ServerId
 	result, err := do.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
 		TableName:        aws.String(do.tableName),
-		FilterExpression: aws.String("user_id = :userId AND serverId = :serverId"),
+		FilterExpression: aws.String("UserId = :userId AND ServerId = :serverId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":userId":   &types.AttributeValueMemberS{Value: userId},
 			":serverId": &types.AttributeValueMemberS{Value: serverId},
@@ -174,18 +174,18 @@ func (do *DeploymentOperations) UpdateDeploymentStatus(ctx context.Context, serv
 	_, err := do.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(do.tableName),
 		Key: map[string]types.AttributeValue{
-			"serverId": &types.AttributeValueMemberS{Value: serverId},
+			"ServerId": &types.AttributeValueMemberS{Value: serverId},
 		},
-		UpdateExpression: aws.String("SET #status = :status, updated_at = :updated_at"),
+		UpdateExpression: aws.String("SET #status = :status, UpdatedAt = :updated_at"),
 		ExpressionAttributeNames: map[string]string{
-			"#status": "status",
+			"#status": "Status",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":status":       &types.AttributeValueMemberS{Value: status},
 			":updated_at":   &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", time.Now().Unix())},
 			":deploymentId": &types.AttributeValueMemberS{Value: deploymentId},
 		},
-		ConditionExpression: aws.String("deploymentId = :deploymentId"),
+		ConditionExpression: aws.String("DeploymentId = :deploymentId"),
 	})
 
 	if err != nil {
@@ -202,12 +202,12 @@ func (do *DeploymentOperations) UpdateDeploymentStatus(ctx context.Context, serv
 // UpdateDeployment updates a deployment with all fields including stages and logs
 func (do *DeploymentOperations) UpdateDeployment(ctx context.Context, deployment *models.Deployment) error {
 	// Prepare the attributes to update
-	updateExpr := "SET #status = :status, #stages = :stages, #logs = :logs, #imageUri = :imageUri, updated_at = :updated_at"
+	updateExpr := "SET #status = :status, #stages = :stages, #logs = :logs, #imageUri = :imageUri, UpdatedAt = :updated_at"
 	exprAttrNames := map[string]string{
-		"#status":   "status",
-		"#stages":   "stages",
-		"#logs":     "logs",
-		"#imageUri": "image_uri",
+		"#status":   "Status",
+		"#stages":   "Stages",
+		"#logs":     "Logs",
+		"#imageUri": "ImageURI",
 	}
 
 	// Convert stages to DynamoDB attribute values
@@ -226,12 +226,12 @@ func (do *DeploymentOperations) UpdateDeployment(ctx context.Context, deployment
 	_, err := do.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(do.tableName),
 		Key: map[string]types.AttributeValue{
-			"serverId": &types.AttributeValueMemberS{Value: deployment.ServerId},
+			"ServerId": &types.AttributeValueMemberS{Value: deployment.ServerId},
 		},
 		UpdateExpression:          aws.String(updateExpr),
 		ExpressionAttributeNames:  exprAttrNames,
 		ExpressionAttributeValues: exprAttrVals,
-		ConditionExpression:       aws.String("deploymentId = :deploymentId"),
+		ConditionExpression:       aws.String("DeploymentId = :deploymentId"),
 	})
 
 	if err != nil {
@@ -249,17 +249,17 @@ func (do *DeploymentOperations) UpdateDeployment(ctx context.Context, deployment
 func (do *DeploymentOperations) unmarshalDeployment(item map[string]types.AttributeValue) (*models.Deployment, error) {
 	// Unmarshal into a temporary struct to handle custom conversions
 	var temp struct {
-		ServerId     string                              `dynamodbav:"serverId"`
-		DeploymentId string                              `dynamodbav:"deploymentId"`
-		UserId       string                              `dynamodbav:"user_id"`
-		Branch       string                              `dynamodbav:"branch"`
-		CommitHash   string                              `dynamodbav:"commit_hash"`
-		Status       string                              `dynamodbav:"status"`
-		Stages       map[string]*models.BuildStageStatus `dynamodbav:"stages"`
-		BuildLogs    []models.BuildLogEntry              `dynamodbav:"logs"`
-		ImageURI     string                              `dynamodbav:"image_uri"`
-		CreatedAt    int64                               `dynamodbav:"created_at"`
-		UpdatedAt    int64                               `dynamodbav:"updated_at"`
+		ServerId     string                              `dynamodbav:"ServerId"`
+		DeploymentId string                              `dynamodbav:"DeploymentId"`
+		UserId       string                              `dynamodbav:"UserId"`
+		Branch       string                              `dynamodbav:"Branch"`
+		CommitHash   string                              `dynamodbav:"CommitHash"`
+		Status       string                              `dynamodbav:"Status"`
+		Stages       map[string]*models.BuildStageStatus `dynamodbav:"Stages"`
+		BuildLogs    []models.BuildLogEntry              `dynamodbav:"Logs"`
+		ImageURI     string                              `dynamodbav:"ImageURI"`
+		CreatedAt    int64                               `dynamodbav:"CreatedAt"`
+		UpdatedAt    int64                               `dynamodbav:"UpdatedAt"`
 	}
 
 	err := attributevalue.UnmarshalMap(item, &temp)

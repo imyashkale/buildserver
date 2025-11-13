@@ -40,17 +40,17 @@ func (ms *MCPServer) CreateMCP(ctx context.Context, server *models.MCPServer) er
 
 	// Marshal the MCP server into a DynamoDB attribute value map
 	av, err := attributevalue.MarshalMap(map[string]interface{}{
-		"id":              server.Id,
-		"user_id":         server.UserId,
-		"name":            server.Name,
-		"description":     server.Description,
-		"repository":      server.Repository,
-		"status":          server.Status,
-		"envs":            server.EnvironmentVariables,
-		"ecr_repo_name":   server.ECRRepositoryName,
-		"ecr_repo_uri":    server.ECRRepositoryURI,
-		"created_at":      server.CreatedAt.Unix(),
-		"updated_at":      server.UpdatedAt.Unix(),
+		"Id":                   server.Id,
+		"UserId":               server.UserId,
+		"Name":                 server.Name,
+		"Description":          server.Description,
+		"Repository":           server.Repository,
+		"Status":               server.Status,
+		"Envs":                 server.EnvironmentVariables,
+		"ECRRepositoryName":    server.ECRRepositoryName,
+		"ECRRepositoryURI":     server.ECRRepositoryURI,
+		"CreatedAt":            server.CreatedAt.Unix(),
+		"UpdatedAt":            server.UpdatedAt.Unix(),
 	})
 
 	if err != nil {
@@ -129,10 +129,10 @@ func (ms *MCPServer) GetAllMCPs(ctx context.Context) ([]*models.MCPServer, error
 
 // GetMCPsByUserId retrieves all MCP servers for a specific user from DynamoDB
 func (ms *MCPServer) GetMCPsByUserId(ctx context.Context, userId string) ([]*models.MCPServer, error) {
-	// Use Scan with FilterExpression to filter by user_id
+	// Use Scan with FilterExpression to filter by UserId
 	result, err := ms.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
 		TableName:        aws.String(ms.tableName),
-		FilterExpression: aws.String("user_id = :userId"),
+		FilterExpression: aws.String("UserId = :userId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":userId": &types.AttributeValueMemberS{Value: userId},
 		},
@@ -160,17 +160,17 @@ func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) er
 	_, err := ms.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(ms.tableName),
 		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: server.Id},
+			"Id": &types.AttributeValueMemberS{Value: server.Id},
 		},
-		UpdateExpression: aws.String("SET #name = :name, #desc = :desc, #repo = :repo, #status = :status, #envs = :envs, #ecrRepoName = :ecrRepoName, #ecrRepoURI = :ecrRepoURI, updated_at = :updated_at"),
+		UpdateExpression: aws.String("SET #name = :name, #desc = :desc, #repo = :repo, #status = :status, #envs = :envs, #ecrRepoName = :ecrRepoName, #ecrRepoURI = :ecrRepoURI, UpdatedAt = :updated_at"),
 		ExpressionAttributeNames: map[string]string{
-			"#name":          "name",
-			"#desc":          "description",
-			"#repo":          "repository",
-			"#status":        "status",
-			"#envs":          "envs",
-			"#ecrRepoName":   "ecr_repo_name",
-			"#ecrRepoURI":    "ecr_repo_uri",
+			"#name":          "Name",
+			"#desc":          "Description",
+			"#repo":          "Repository",
+			"#status":        "Status",
+			"#envs":          "Envs",
+			"#ecrRepoName":   "ECRRepositoryName",
+			"#ecrRepoURI":    "ECRRepositoryURI",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":name":          &types.AttributeValueMemberS{Value: server.Name},
@@ -237,17 +237,17 @@ func (ops *MCPServer) MCPExists(ctx context.Context, id string) (bool, error) {
 func (ops *MCPServer) unmarshalMCPServer(item map[string]types.AttributeValue) (*models.MCPServer, error) {
 	// Unmarshal into a temporary map to handle custom conversions
 	var temp struct {
-		Id                   string                       `dynamodbav:"id"`
-		UserId               string                       `dynamodbav:"user_id"`
-		Name                 string                       `dynamodbav:"name"`
-		Description          string                       `dynamodbav:"description"`
-		Repository           string                       `dynamodbav:"repository"`
-		Status               string                       `dynamodbav:"status"`
-		EnvironmentVariables []models.EnvironmentVariable `dynamodbav:"envs"`
-		ECRRepositoryName    string                       `dynamodbav:"ecr_repo_name"`
-		ECRRepositoryURI     string                       `dynamodbav:"ecr_repo_uri"`
-		CreatedAt            int64                        `dynamodbav:"created_at"`
-		UpdatedAt            int64                        `dynamodbav:"updated_at"`
+		Id                   string                       `dynamodbav:"Id"`
+		UserId               string                       `dynamodbav:"UserId"`
+		Name                 string                       `dynamodbav:"Name"`
+		Description          string                       `dynamodbav:"Description"`
+		Repository           string                       `dynamodbav:"Repository"`
+		Status               string                       `dynamodbav:"Status"`
+		EnvironmentVariables []models.EnvironmentVariable `dynamodbav:"Envs"`
+		ECRRepositoryName    string                       `dynamodbav:"ECRRepositoryName"`
+		ECRRepositoryURI     string                       `dynamodbav:"ECRRepositoryURI"`
+		CreatedAt            int64                        `dynamodbav:"CreatedAt"`
+		UpdatedAt            int64                        `dynamodbav:"UpdatedAt"`
 	}
 
 	err := attributevalue.UnmarshalMap(item, &temp)

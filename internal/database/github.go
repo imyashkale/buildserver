@@ -48,14 +48,14 @@ func (db *GitHubDB) CreateGitHubConnection(ctx context.Context, conn *models.Git
 
 	// Marshal the connection to DynamoDB item
 	item, err := attributevalue.MarshalMap(map[string]interface{}{
-		"id":             conn.Id,
-		"UserId":         conn.UserId,
-		"GitHubUserId":   conn.GitHubUserId,
-		"AccessToken":    conn.AccessToken,
-		"GitHubUsername": conn.GitHubUsername,
-		"GitHubUserData": conn.GitHubUserData,
-		"ConnectedAt":    conn.ConnectedAt,
-		"UpdatedAt":      conn.UpdatedAt,
+		"Id":               conn.Id,
+		"UserId":           conn.UserId,
+		"GitHubUserId":     conn.GitHubUserId,
+		"AccessToken":      conn.AccessToken,
+		"GitHubUsername":   conn.GitHubUsername,
+		"GitHubUserData":   conn.GitHubUserData,
+		"ConnectedAt":      conn.ConnectedAt,
+		"UpdatedAt":        conn.UpdatedAt,
 	})
 
 	if err != nil {
@@ -112,7 +112,7 @@ func (db *GitHubDB) GetGitHubConnectionById(ctx context.Context, id string) (*mo
 	result, err := db.client.DynamoDB.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(db.connectionsTableName),
 		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: id},
+			"Id": &types.AttributeValueMemberS{Value: id},
 		},
 	})
 
@@ -139,14 +139,14 @@ func (db *GitHubDB) UpdateGitHubConnection(ctx context.Context, conn *models.Git
 
 	// Marshal the connection to DynamoDB item
 	item, err := attributevalue.MarshalMap(map[string]interface{}{
-		"id":             conn.Id,
-		"UserId":         conn.UserId,
-		"GitHubUserId":   conn.GitHubUserId,
-		"AccessToken":    conn.AccessToken,
-		"GitHubUsername": conn.GitHubUsername,
-		"GitHubUserData": conn.GitHubUserData,
-		"ConnectedAt":    conn.ConnectedAt,
-		"UpdatedAt":      conn.UpdatedAt,
+		"Id":               conn.Id,
+		"UserId":           conn.UserId,
+		"GitHubUserId":     conn.GitHubUserId,
+		"AccessToken":      conn.AccessToken,
+		"GitHubUsername":   conn.GitHubUsername,
+		"GitHubUserData":   conn.GitHubUserData,
+		"ConnectedAt":      conn.ConnectedAt,
+		"UpdatedAt":        conn.UpdatedAt,
 	})
 
 	// Put item in DynamoDB (will overwrite existing)
@@ -173,7 +173,7 @@ func (db *GitHubDB) DeleteGitHubConnection(ctx context.Context, userId string) e
 	_, err = db.client.DynamoDB.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(db.connectionsTableName),
 		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: conn.Id},
+			"Id": &types.AttributeValueMemberS{Value: conn.Id},
 		},
 	})
 	if err != nil {
@@ -204,7 +204,7 @@ func (db *GitHubDB) GitHubConnectionExists(ctx context.Context, userId string) (
 func (db *GitHubDB) CreateOAuthState(ctx context.Context, state *models.OAuthState) error {
 	// Marshal the state to DynamoDB item
 	item, err := attributevalue.MarshalMap(map[string]interface{}{
-		"id":         state.Id,
+		"Id":         state.Id,
 		"StateToken": state.StateToken,
 		"UserId":     state.UserId,
 		"CreatedAt":  state.CreatedAt,
@@ -259,7 +259,7 @@ func (db *GitHubDB) DeleteOAuthState(ctx context.Context, id string) error {
 	_, err := db.client.DynamoDB.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(db.oauthStatesTableName),
 		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: id},
+			"Id": &types.AttributeValueMemberS{Value: id},
 		},
 	})
 
