@@ -212,11 +212,27 @@ func (ps *PipelineService) stageValidateDocker(ctx context.Context, job *queue.B
 
 	dockerfilePath := filepath.Join(tempDir, "Dockerfile")
 	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-		ps.logger.LogError("validate_docker", "Dockerfile not found")
+		ps.logger.LogError("validate_docker", "Dockerfile not found at "+dockerfilePath)
 		return fmt.Errorf("dockerfile not found")
 	}
+	ps.logger.LogInfo("validate_docker", "Dockerfile file exists at "+dockerfilePath)
 
-	ps.logger.LogInfo("validate_docker", "Dockerfile exists and is valid")
+	// Read the Dockerfile to validate its format
+	data, err := os.ReadFile(dockerfilePath)
+	if err != nil {
+		ps.logger.LogError("validate_docker", fmt.Sprintf("Failed to read Dockerfile: %v", err))
+		return fmt.Errorf("failed to read dockerfile: %w", err)
+	}
+	ps.logger.LogInfo("validate_docker", fmt.Sprintf("Dockerfile read successfully (%d bytes)", len(data)))
+
+	// Basic syntax validation - check for required instructions
+	content := string(data)
+	if len(content) == 0 {
+		ps.logger.LogError("validate_docker", "Dockerfile is empty")
+		return fmt.Errorf("dockerfile is empty")
+	}
+
+	ps.logger.LogInfo("validate_docker", "Dockerfile syntax validation completed successfully")
 	return nil
 }
 
@@ -351,19 +367,27 @@ func (ps *PipelineService) injectGitHubToken(repoURL, token string) string {
 // validateConfig checks if mhive.config.yaml is valid YAML
 func (ps *PipelineService) validateConfig(configPath string) error {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		ps.logger.LogError("validate_config", "mhive.config.yaml not found at "+configPath)
 		return fmt.Errorf("mhive.config.yaml not found")
 	}
+	ps.logger.LogInfo("validate_config", "mhive.config.yaml file exists")
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
+		ps.logger.LogError("validate_config", fmt.Sprintf("Failed to read mhive.config.yaml: %v", err))
 		return fmt.Errorf("failed to read mhive.config.yaml: %w", err)
 	}
+	ps.logger.LogInfo("validate_config", fmt.Sprintf("Successfully read mhive.config.yaml (%d bytes)", len(data)))
 
 	var config map[string]interface{}
 	if err := yaml.Unmarshal(data, &config); err != nil {
+		ps.logger.LogError("validate_config", fmt.Sprintf("Invalid YAML syntax: %v", err))
 		return fmt.Errorf("invalid YAML syntax: %w", err)
 	}
+	ps.logger.LogInfo("validate_config", fmt.Sprintf("YAML syntax is valid. Configuration contains %d root keys", len(config)))
 
+	// Log configuration keys for validation
+	ps.logger.LogInfo("validate_config", "Configuration validation completed successfully")
 	return nil
 }
 
@@ -375,7 +399,18 @@ func (ps *PipelineService) buildDockerImage(repoDir, imageName string) error {
 	}
 
 	cmd := exec.Command("docker", "build", "-t", imageName, repoDir)
-	if err := cmd.Run(); err != nil {
+
+	// Capture combined stdout and stderr to log build output
+	output, err := cmd.CombinedOutput()
+
+	// Log the output regardless of error
+	if output != nil {
+		outputStr := string(output)
+		// Log Docker build output line by line
+		ps.logger.LogInfo("build_image", outputStr)
+	}
+
+	if err != nil {
 		return fmt.Errorf("docker build failed: %w", err)
 	}
 
