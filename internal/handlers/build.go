@@ -207,27 +207,8 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		CommitHash:   deployment.CommitHash,
 	}
 
-	// Execute build synchronously for testing purposes
-	logger.WithFields(map[string]interface{}{
-		"user_id":       userIdStr,
-		"server_id":     serverId,
-		"deployment_id": deploymentId,
-	}).Info("Executing build pipeline")
-
-	err = h.pipelineService.ExecuteBuild(ctx, job)
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"user_id":       userIdStr,
-			"server_id":     serverId,
-			"deployment_id": deploymentId,
-			"error":         err.Error(),
-		}).Error("Build execution failed")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "build_error",
-			"message": "Failed to execute build: " + err.Error(),
-		})
-		return
-	}
+	// Enqueue the job for asynchronous processing
+	h.jobQueue.Enqueue(job)
 
 	logger.WithFields(map[string]interface{}{
 		"user_id":       userIdStr,
