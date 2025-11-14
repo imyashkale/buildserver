@@ -1,7 +1,7 @@
 # DynamoDB Schema
 
 ## McpServers
-- `Id` (String) - Unique identifier for MCP server
+- `ServerId` (String) - Unique identifier for MCP server (Partition Key)
 - `UserId` (String) - Auth0 user ID who owns the server
 - `Name` (String) - Display name of the MCP server
 - `Description` (String) - Detailed description of the MCP server's purpose
@@ -11,11 +11,13 @@
   - `Name` (String) - Environment variable name (e.g., "API_KEY", "DATABASE_URL")
   - `Value` (String) - Environment variable value (encrypted if marked as secret)
   - `IsSecret` (Boolean) - Whether value is sensitive and should be encrypted
+- `ECRRepositoryName` (String) - ECR repository name for container image
+- `ECRRepositoryURI` (String) - Full ECR repository URI
 - `CreatedAt` (Number) - Unix timestamp of when server was created
 - `UpdatedAt` (Number) - Unix timestamp of last modification
 
 ## Deployments
-- `ServerId` (String) - ID of the MCP server being deployed (Primary Key)
+- `ServerId` (String) - ID of the MCP server being deployed (Partition Key)
 - `DeploymentId` (String) - Unique identifier for this specific deployment
 - `UserId` (String) - Auth0 user ID who triggered the deployment
 - `Branch` (String) - Git branch being deployed (e.g., "main", "develop")

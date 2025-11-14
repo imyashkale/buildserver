@@ -4,7 +4,7 @@ import "time"
 
 // CreateMCPServerRequest represents the request body for creating a new MCP server
 type CreateMCPServerRequest struct {
-	Id                   string                `json:"id"` // ID will be set server-side
+	ServerId             string                `json:"server_id"` // ServerId will be set server-side
 	Name                 string                `json:"name" binding:"required"`
 	Description          string                `json:"description"`
 	Repository           string                `json:"repository" binding:"required"`
@@ -15,7 +15,7 @@ type CreateMCPServerRequest struct {
 func (req *CreateMCPServerRequest) ToDomain() *MCPServer {
 	now := time.Now()
 	return &MCPServer{
-		Id:                   req.Id, // Will be set by handler if empty
+		ServerId:             req.ServerId, // Will be set by handler if empty
 		Name:                 req.Name,
 		Description:          req.Description,
 		Repository:           req.Repository,
@@ -28,7 +28,7 @@ func (req *CreateMCPServerRequest) ToDomain() *MCPServer {
 
 // MCPServerResponse represents the response structure for a single MCP server
 type MCPServerResponse struct {
-	Id                   string                `json:"id"`
+	ServerId             string                `json:"server_id"`
 	UserId               string                `json:"user_id"`
 	Name                 string                `json:"name"`
 	Description          string                `json:"description"`
@@ -48,7 +48,7 @@ type MCPServerListResponse struct {
 // ToResponse converts a domain MCPServer to an MCPServerResponse DTO
 func (m *MCPServer) ToResponse() MCPServerResponse {
 	return MCPServerResponse{
-		Id:                   m.Id,
+		ServerId:             m.ServerId,
 		UserId:               m.UserId,
 		Name:                 m.Name,
 		Description:          m.Description,
