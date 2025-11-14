@@ -45,6 +45,9 @@ func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment
 		"Branch":       deployment.Branch,
 		"CommitHash":   deployment.CommitHash,
 		"Status":       deployment.Status,
+		"Stages":       deployment.Stages,
+		"Logs":         deployment.BuildLogs,
+		"ImageURI":     deployment.ImageURI,
 		"CreatedAt":    deployment.CreatedAt.Unix(),
 		"UpdatedAt":    deployment.UpdatedAt.Unix(),
 	})

@@ -5,9 +5,9 @@ import "time"
 // BuildStageStatus represents the status of a single build stage
 type BuildStageStatus struct {
 	Status      string     `json:"status" dynamodbav:"Status"` // "pending", "in_progress", "completed", "failed"
-	StartedAt   *time.Time `json:"started_at,omitempty" dynamodbav:"StartedAt,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty" dynamodbav:"CompletedAt,omitempty"`
-	Error       string     `json:"error,omitempty" dynamodbav:"Error,omitempty"`
+	StartedAt   *time.Time `json:"started_at,omitempty" dynamodbav:"StartedAt"`
+	CompletedAt *time.Time `json:"completed_at,omitempty" dynamodbav:"CompletedAt"`
+	Error       string     `json:"error,omitempty" dynamodbav:"Error"`
 }
 
 // BuildLogEntry represents a single log entry from the build process
@@ -21,15 +21,15 @@ type BuildLogEntry struct {
 // Deployment represents the domain model for a deployment
 // This is a database-agnostic business entity
 type Deployment struct {
-	ServerId     string
-	DeploymentId string
-	UserId       string // Auth0 user ID
-	Branch       string
-	CommitHash   string
-	Status       string                       // e.g., "queued", "in_progress", "completed", "failed"
-	Stages       map[string]*BuildStageStatus `json:"stages,omitempty"`     // Track individual stage progress
-	BuildLogs    []BuildLogEntry              `json:"build_logs,omitempty"` // Structured logs
-	ImageURI     string                       `json:"image_uri,omitempty"`  // ECR image reference
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ServerId     string                       `dynamodbav:"ServerId"`
+	DeploymentId string                       `dynamodbav:"DeploymentId"`
+	UserId       string                       `dynamodbav:"UserId"` // Auth0 user ID
+	Branch       string                       `dynamodbav:"Branch"`
+	CommitHash   string                       `dynamodbav:"CommitHash"`
+	Status       string                       `dynamodbav:"Status"` // e.g., "queued", "in_progress", "completed", "failed"
+	Stages       map[string]*BuildStageStatus `dynamodbav:"Stages"`
+	BuildLogs    []BuildLogEntry              `dynamodbav:"Logs"`
+	ImageURI     string                       `dynamodbav:"ImageURI"`
+	CreatedAt    time.Time                    `dynamodbav:"CreatedAt"`
+	UpdatedAt    time.Time                    `dynamodbav:"UpdatedAt"`
 }

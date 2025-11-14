@@ -41,24 +41,24 @@ func (ms *MCPServer) CreateMCP(ctx context.Context, server *models.MCPServer) er
 
 	// Marshal the MCP server into a DynamoDB attribute value map
 	av, err := attributevalue.MarshalMap(map[string]interface{}{
-		"Id":                   server.Id,
-		"UserId":               server.UserId,
-		"Name":                 server.Name,
-		"Description":          server.Description,
-		"Repository":           server.Repository,
-		"Status":               server.Status,
-		"Envs":                 server.EnvironmentVariables,
-		"ECRRepositoryName":    server.ECRRepositoryName,
-		"ECRRepositoryURI":     server.ECRRepositoryURI,
-		"CreatedAt":            server.CreatedAt.Unix(),
-		"UpdatedAt":            server.UpdatedAt.Unix(),
+		"ServerId":    server.ServerId,
+		"UserId":      server.UserId,
+		"Name":        server.Name,
+		"Description": server.Description,
+		"Repository":  server.Repository,
+		"Status":      server.Status,
+		"Envs":        server.EnvironmentVariables,
+		"ECRRepositoryName": server.ECRRepositoryName,
+		"ECRRepositoryURI":  server.ECRRepositoryURI,
+		"CreatedAt":   server.CreatedAt.Unix(),
+		"UpdatedAt":   server.UpdatedAt.Unix(),
 	})
 
 	if err != nil {
 		return fmt.Errorf("failed to marshal MCP server: %w", err)
 	}
 
-	log.Println("Creating MCP server with ID:", server.Id, server.Name)
+	log.Println("Creating MCP server with ServerId:", server.ServerId, server.Name)
 
 	// Check if item already exists
 	_, err = ms.client.DynamoDB.PutItem(ctx, &dynamodb.PutItemInput{
@@ -78,28 +78,28 @@ func (ms *MCPServer) CreateMCP(ctx context.Context, server *models.MCPServer) er
 	return nil
 }
 
-// GetMCP retrieves an MCP server by ID from DynamoDB
-func (ms *MCPServer) GetMCP(ctx context.Context, id string) (*models.MCPServer, error) {
-	logger.WithField("server_id", id).Debug("Retrieving MCP server from DynamoDB")
+// GetMCP retrieves an MCP server by ServerId from DynamoDB
+func (ms *MCPServer) GetMCP(ctx context.Context, serverId string) (*models.MCPServer, error) {
+	logger.WithField("server_id", serverId).Debug("Retrieving MCP server from DynamoDB")
 
 	// Get the item from DynamoDB
 	result, err := ms.client.DynamoDB.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(ms.tableName),
 		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: id},
+			"ServerId": &types.AttributeValueMemberS{Value: serverId},
 		},
 	})
 
 	if err != nil {
 		logger.WithFields(map[string]interface{}{
-			"server_id": id,
+			"server_id": serverId,
 			"error":     err.Error(),
 		}).Error("Failed to get MCP server from DynamoDB")
 		return nil, fmt.Errorf("failed to get MCP server: %w", err)
 	}
 
 	if result.Item == nil {
-		logger.WithField("server_id", id).Warn("MCP server not found in DynamoDB")
+		logger.WithField("server_id", serverId).Warn("MCP server not found in DynamoDB")
 		return nil, ErrNotFound
 	}
 
@@ -107,14 +107,14 @@ func (ms *MCPServer) GetMCP(ctx context.Context, id string) (*models.MCPServer, 
 	server, err := ms.unmarshalMCPServer(result.Item)
 	if err != nil {
 		logger.WithFields(map[string]interface{}{
-			"server_id": id,
+			"server_id": serverId,
 			"error":     err.Error(),
 		}).Error("Failed to unmarshal MCP server")
 		return nil, fmt.Errorf("failed to unmarshal MCP server: %w", err)
 	}
 
 	logger.WithFields(map[string]interface{}{
-		"server_id": id,
+		"server_id": serverId,
 		"name":      server.Name,
 	}).Debug("MCP server retrieved successfully from DynamoDB")
 
@@ -173,7 +173,7 @@ func (ms *MCPServer) GetMCPsByUserId(ctx context.Context, userId string) ([]*mod
 // UpdateMCP updates an existing MCP server in DynamoDB
 func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) error {
 	logger.WithFields(map[string]interface{}{
-		"server_id": server.Id,
+		"server_id": server.ServerId,
 		"name":      server.Name,
 	}).Debug("Updating MCP server in DynamoDB")
 
@@ -181,7 +181,7 @@ func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) er
 	_, err := ms.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(ms.tableName),
 		Key: map[string]types.AttributeValue{
-			"Id": &types.AttributeValueMemberS{Value: server.Id},
+			"ServerId": &types.AttributeValueMemberS{Value: server.ServerId},
 		},
 		UpdateExpression: aws.String("SET #name = :name, #desc = :desc, #repo = :repo, #status = :status, #envs = :envs, #ecrRepoName = :ecrRepoName, #ecrRepoURI = :ecrRepoURI, UpdatedAt = :updated_at"),
 		ExpressionAttributeNames: map[string]string{
@@ -207,18 +207,18 @@ func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) er
 	if err != nil {
 		var ccf *types.ConditionalCheckFailedException
 		if errors.As(err, &ccf) {
-			logger.WithField("server_id", server.Id).Warn("MCP server not found during update")
+			logger.WithField("server_id", server.ServerId).Warn("MCP server not found during update")
 			return ErrNotFound
 		}
 		logger.WithFields(map[string]interface{}{
-			"server_id": server.Id,
+			"server_id": server.ServerId,
 			"error":     err.Error(),
 		}).Error("Failed to update MCP server in DynamoDB")
 		return fmt.Errorf("failed to update MCP server: %w", err)
 	}
 
 	logger.WithFields(map[string]interface{}{
-		"server_id": server.Id,
+		"server_id": server.ServerId,
 		"name":      server.Name,
 	}).Info("MCP server updated successfully in DynamoDB")
 
@@ -226,13 +226,13 @@ func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) er
 }
 
 // DeleteMCP deletes an MCP server from DynamoDB
-func (ops *MCPServer) DeleteMCP(ctx context.Context, id string) error {
+func (ops *MCPServer) DeleteMCP(ctx context.Context, serverId string) error {
 	_, err := ops.client.DynamoDB.DeleteItem(ctx, &dynamodb.DeleteItemInput{
 		TableName: aws.String(ops.client.TableName),
 		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: id},
+			"ServerId": &types.AttributeValueMemberS{Value: serverId},
 		},
-		ConditionExpression: aws.String("attribute_exists(id)"),
+		ConditionExpression: aws.String("attribute_exists(ServerId)"),
 	})
 
 	if err != nil {
@@ -247,13 +247,13 @@ func (ops *MCPServer) DeleteMCP(ctx context.Context, id string) error {
 }
 
 // MCPExists checks if an MCP server exists in DynamoDB
-func (ops *MCPServer) MCPExists(ctx context.Context, id string) (bool, error) {
+func (ops *MCPServer) MCPExists(ctx context.Context, serverId string) (bool, error) {
 	result, err := ops.client.DynamoDB.GetItem(ctx, &dynamodb.GetItemInput{
 		TableName: aws.String(ops.client.TableName),
 		Key: map[string]types.AttributeValue{
-			"id": &types.AttributeValueMemberS{Value: id},
+			"ServerId": &types.AttributeValueMemberS{Value: serverId},
 		},
-		ProjectionExpression: aws.String("id"),
+		ProjectionExpression: aws.String("ServerId"),
 	})
 
 	if err != nil {
@@ -265,9 +265,9 @@ func (ops *MCPServer) MCPExists(ctx context.Context, id string) (bool, error) {
 
 // unmarshalMCPServer is a helper function to unmarshal DynamoDB item to MCPServer domain model
 func (ops *MCPServer) unmarshalMCPServer(item map[string]types.AttributeValue) (*models.MCPServer, error) {
-	// Unmarshal into a temporary map to handle custom conversions
+	// Unmarshal into a temporary struct to handle custom conversions
 	var temp struct {
-		Id                   string                       `dynamodbav:"Id"`
+		ServerId             string                       `dynamodbav:"ServerId"`
 		UserId               string                       `dynamodbav:"UserId"`
 		Name                 string                       `dynamodbav:"Name"`
 		Description          string                       `dynamodbav:"Description"`
@@ -287,7 +287,7 @@ func (ops *MCPServer) unmarshalMCPServer(item map[string]types.AttributeValue) (
 
 	// Convert to domain model with proper time.Time conversion
 	server := &models.MCPServer{
-		Id:                   temp.Id,
+		ServerId:             temp.ServerId,
 		UserId:               temp.UserId,
 		Name:                 temp.Name,
 		Description:          temp.Description,
