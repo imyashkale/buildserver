@@ -174,10 +174,10 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 
 	if deployment.UserId != userIdStr {
 		logger.WithFields(map[string]interface{}{
-			"user_id":              userIdStr,
-			"server_id":            serverId,
-			"deployment_id":        deploymentId,
-			"deployment_owner_id":  deployment.UserId,
+			"user_id":             userIdStr,
+			"server_id":           serverId,
+			"deployment_id":       deploymentId,
+			"deployment_owner_id": deployment.UserId,
 		}).Warn("Build initiation failed: permission denied for deployment")
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "forbidden",
@@ -206,126 +206,5 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"message": "Build initiated successfully",
-	})
-}
-
-// GetBuildDetails handles retrieving build details
-func (h *BuildHandler) GetBuildDetails(c *gin.Context) {
-	logger.Debug("GetBuildDetails handler invoked")
-
-	// Get user ID from context (set by auth middleware)
-	userId, exists := c.Get("user_id")
-	if !exists {
-		logger.Warn("GetBuildDetails failed: user_id not found in context")
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error":   "unauthorized",
-			"message": "User ID not found in context",
-		})
-		return
-	}
-
-	userIdStr, ok := userId.(string)
-	if !ok {
-		logger.Error("GetBuildDetails failed: invalid user_id format in context")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "internal_error",
-			"message": "Invalid user ID format",
-		})
-		return
-	}
-
-	// Get server ID and deployment ID from URL parameters
-	serverId := c.Param("server_id")
-	deploymentId := c.Param("deployment_id")
-
-	if serverId == "" || deploymentId == "" {
-		logger.WithField("user_id", userIdStr).Warn("GetBuildDetails failed: server_id and deployment_id are required")
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "bad_request",
-			"message": "Server ID and Deployment ID are required",
-		})
-		return
-	}
-
-	logger.WithFields(map[string]interface{}{
-		"user_id":       userIdStr,
-		"server_id":     serverId,
-		"deployment_id": deploymentId,
-	}).Debug("GetBuildDetails request received")
-
-	ctx := c.Request.Context()
-
-	// Get MCP server
-	mcp, err := h.mcpRepo.Get(ctx, serverId)
-	if err != nil || mcp == nil {
-		logger.WithFields(map[string]interface{}{
-			"user_id":       userIdStr,
-			"server_id":     serverId,
-			"deployment_id": deploymentId,
-			"error":         err,
-		}).Warn("GetBuildDetails failed: MCP server not found")
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "mcp_not_found",
-			"message": "MCP server not found",
-		})
-		return
-	}
-
-	// Verify MCP ownership
-	if mcp.UserId != userIdStr {
-		logger.WithFields(map[string]interface{}{
-			"user_id":       userIdStr,
-			"server_id":     serverId,
-			"deployment_id": deploymentId,
-			"mcp_owner_id":  mcp.UserId,
-		}).Warn("GetBuildDetails failed: permission denied for MCP server")
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":   "forbidden",
-			"message": "You don't have permission to view this MCP server",
-		})
-		return
-	}
-
-	// Get deployment details using server ID and deployment ID as commit hash
-	deployment, err := h.deploymentRepo.Get(ctx, serverId, deploymentId)
-	if err != nil || deployment == nil {
-		logger.WithFields(map[string]interface{}{
-			"user_id":       userIdStr,
-			"server_id":     serverId,
-			"deployment_id": deploymentId,
-			"error":         err,
-		}).Warn("GetBuildDetails failed: deployment not found")
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "deployment_not_found",
-			"message": "Deployment not found",
-		})
-		return
-	}
-
-	// Verify deployment ownership
-	if deployment.UserId != userIdStr {
-		logger.WithFields(map[string]interface{}{
-			"user_id":             userIdStr,
-			"server_id":           serverId,
-			"deployment_id":       deploymentId,
-			"deployment_owner_id": deployment.UserId,
-		}).Warn("GetBuildDetails failed: permission denied for deployment")
-		c.JSON(http.StatusForbidden, gin.H{
-			"error":   "forbidden",
-			"message": "You don't have permission to view this deployment",
-		})
-		return
-	}
-
-	logger.WithFields(map[string]interface{}{
-		"user_id":       userIdStr,
-		"server_id":     serverId,
-		"deployment_id": deploymentId,
-		"status":        deployment.Status,
-	}).Info("Build details retrieved successfully")
-
-	c.JSON(http.StatusOK, gin.H{
-		"mcp":        mcp,
-		"deployment": deployment.ToResponse(),
 	})
 }

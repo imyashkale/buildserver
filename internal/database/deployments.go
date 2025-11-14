@@ -82,28 +82,6 @@ func (do *DeploymentOperations) GetDeployment(ctx context.Context, serverId, dep
 	return deployment, nil
 }
 
-// GetAllDeployments retrieves all deployments from DynamoDB
-func (do *DeploymentOperations) GetAllDeployments(ctx context.Context) ([]*models.Deployment, error) {
-	result, err := do.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
-		TableName: aws.String(do.tableName),
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan deployments: %w", err)
-	}
-
-	deployments := make([]*models.Deployment, 0, len(result.Items))
-	for _, item := range result.Items {
-		deployment, err := do.unmarshalDeployment(item)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal deployment: %w", err)
-		}
-		deployments = append(deployments, deployment)
-	}
-
-	return deployments, nil
-}
-
 // GetDeploymentsByUserId retrieves all deployments for a specific user from DynamoDB
 func (do *DeploymentOperations) GetDeploymentsByUserId(ctx context.Context, userId string) ([]*models.Deployment, error) {
 	// Use Scan with FilterExpression to filter by UserId

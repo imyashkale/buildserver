@@ -36,46 +36,6 @@ func NewGitHubDB(client *Client, connectionsTableName, oauthStatesTableName stri
 	}
 }
 
-// CreateGitHubConnection creates a new GitHub connection
-func (db *GitHubDB) CreateGitHubConnection(ctx context.Context, conn *models.GitHubConnection) error {
-	// Check if connection already exists
-	exists, err := db.GitHubConnectionExists(ctx, conn.UserId)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return ErrGitHubConnectionAlreadyExists
-	}
-
-	// Marshal the connection to DynamoDB item
-	item, err := attributevalue.MarshalMap(map[string]interface{}{
-		"Id":               conn.Id,
-		"UserId":           conn.UserId,
-		"GitHubUserId":     conn.GitHubUserId,
-		"AccessToken":      conn.AccessToken,
-		"GitHubUsername":   conn.GitHubUsername,
-		"GitHubUserData":   conn.GitHubUserData,
-		"ConnectedAt":      conn.ConnectedAt,
-		"UpdatedAt":        conn.UpdatedAt,
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to marshal github connection: %w", err)
-	}
-
-	// Put item in DynamoDB
-	_, err = db.client.DynamoDB.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(db.connectionsTableName),
-		Item:      item,
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to create github connection: %w", err)
-	}
-
-	return nil
-}
-
 // GetGitHubConnectionByUserId retrieves a GitHub connection by Auth0 user ID
 func (db *GitHubDB) GetGitHubConnectionByUserId(ctx context.Context, userId string) (*models.GitHubConnection, error) {
 	logger.WithField("user_id", userId).Debug("Retrieving GitHub connection from DynamoDB")
@@ -150,55 +110,6 @@ func (db *GitHubDB) GetGitHubConnectionById(ctx context.Context, id string) (*mo
 	return &conn, nil
 }
 
-// UpdateGitHubConnection updates an existing GitHub connection
-func (db *GitHubDB) UpdateGitHubConnection(ctx context.Context, conn *models.GitHubConnection) error {
-
-	// Marshal the connection to DynamoDB item
-	item, err := attributevalue.MarshalMap(map[string]interface{}{
-		"Id":               conn.Id,
-		"UserId":           conn.UserId,
-		"GitHubUserId":     conn.GitHubUserId,
-		"AccessToken":      conn.AccessToken,
-		"GitHubUsername":   conn.GitHubUsername,
-		"GitHubUserData":   conn.GitHubUserData,
-		"ConnectedAt":      conn.ConnectedAt,
-		"UpdatedAt":        conn.UpdatedAt,
-	})
-
-	// Put item in DynamoDB (will overwrite existing)
-	_, err = db.client.DynamoDB.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(db.connectionsTableName),
-		Item:      item,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update github connection: %w", err)
-	}
-
-	return nil
-}
-
-// DeleteGitHubConnection deletes a GitHub connection by user ID
-func (db *GitHubDB) DeleteGitHubConnection(ctx context.Context, userId string) error {
-	// First get the connection to find its ID
-	conn, err := db.GetGitHubConnectionByUserId(ctx, userId)
-	if err != nil {
-		return err
-	}
-
-	// Delete the item
-	_, err = db.client.DynamoDB.DeleteItem(ctx, &dynamodb.DeleteItemInput{
-		TableName: aws.String(db.connectionsTableName),
-		Key: map[string]types.AttributeValue{
-			"Id": &types.AttributeValueMemberS{Value: conn.Id},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to delete github connection: %w", err)
-	}
-
-	return nil
-}
-
 // GitHubConnectionExists checks if a GitHub connection exists for a user
 func (db *GitHubDB) GitHubConnectionExists(ctx context.Context, userId string) (bool, error) {
 	result, err := db.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
@@ -214,33 +125,6 @@ func (db *GitHubDB) GitHubConnectionExists(ctx context.Context, userId string) (
 	}
 
 	return result.Count > 0, nil
-}
-
-// CreateOAuthState creates a new OAuth state token
-func (db *GitHubDB) CreateOAuthState(ctx context.Context, state *models.OAuthState) error {
-	// Marshal the state to DynamoDB item
-	item, err := attributevalue.MarshalMap(map[string]interface{}{
-		"Id":         state.Id,
-		"StateToken": state.StateToken,
-		"UserId":     state.UserId,
-		"CreatedAt":  state.CreatedAt,
-		"ExpiresAt":  state.ExpiresAt,
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to marshal oauth state: %w", err)
-	}
-
-	// Put item in DynamoDB
-	_, err = db.client.DynamoDB.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(db.oauthStatesTableName),
-		Item:      item,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create oauth state: %w", err)
-	}
-
-	return nil
 }
 
 // GetOAuthState retrieves an OAuth state by state token
@@ -267,21 +151,4 @@ func (db *GitHubDB) GetOAuthState(ctx context.Context, stateToken string) (*mode
 	}
 
 	return &state, nil
-}
-
-// DeleteOAuthState deletes an OAuth state by ID
-func (db *GitHubDB) DeleteOAuthState(ctx context.Context, id string) error {
-
-	_, err := db.client.DynamoDB.DeleteItem(ctx, &dynamodb.DeleteItemInput{
-		TableName: aws.String(db.oauthStatesTableName),
-		Key: map[string]types.AttributeValue{
-			"Id": &types.AttributeValueMemberS{Value: id},
-		},
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to delete oauth state: %w", err)
-	}
-
-	return nil
 }
