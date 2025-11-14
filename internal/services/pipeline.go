@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/imyashkale/buildserver/internal/logger"
 	"github.com/imyashkale/buildserver/internal/models"
 	"github.com/imyashkale/buildserver/internal/queue"
 	"github.com/imyashkale/buildserver/internal/repository"
@@ -45,7 +46,11 @@ func NewPipelineService(
 // ExecuteBuild executes the complete build pipeline for a job
 func (ps *PipelineService) ExecuteBuild(ctx context.Context, job *queue.BuildJob) error {
 
-	fmt.Println("Build getting executed --- ", job.DeploymentID)
+	logger.WithFields(map[string]interface{}{
+		"deployment_id": job.DeploymentID,
+		"server_id":     job.ServerID,
+		"user_id":       job.UserID,
+	}).Info("Build execution started")
 
 	ps.logger.Clear()
 	now := time.Now()
@@ -64,11 +69,19 @@ func (ps *PipelineService) ExecuteBuild(ctx context.Context, job *queue.BuildJob
 	deployment, err := ps.deploymentRepo.Get(ctx, job.ServerID, job.DeploymentID)
 	if err != nil || deployment == nil {
 		ps.logger.LogError("init", "Failed to fetch deployment from database")
+		logger.WithFields(map[string]interface{}{
+			"deployment_id": job.DeploymentID,
+			"server_id":     job.ServerID,
+		}).Error("Failed to fetch deployment from database")
 		return fmt.Errorf("deployment not found")
 	}
 
 	// Log deployment details
-	fmt.Println("Deployment queried: ", deployment.DeploymentId, deployment.ServerId, deployment.CommitHash)
+	logger.WithFields(map[string]interface{}{
+		"deployment_id": deployment.DeploymentId,
+		"server_id":     deployment.ServerId,
+		"commit_hash":   deployment.CommitHash,
+	}).Debug("Deployment record retrieved")
 
 	deployment.Stages = stages
 	deployment.Status = "in_progress"

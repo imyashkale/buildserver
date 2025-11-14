@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/imyashkale/buildserver/internal/logger"
 )
 
 var (
@@ -52,10 +53,13 @@ func NewAuth0Config(domain, audience string) *Auth0Config {
 // Authentication middleware validates Auth0 JWT tokens
 func Authentication() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		logger.Debug("Authentication middleware invoked")
+
 		// Extract the bearer token from the Authorization header
 		authHeader := c.GetHeader("Authorization")
 		const prefix = "Bearer "
 		if len(authHeader) < len(prefix) || authHeader[:len(prefix)] != prefix {
+			logger.WithField("path", c.Request.URL.Path).Warn("Authentication failed: missing or invalid authorization header")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "unauthorized",
 				"message": "Missing or invalid authorization header",
@@ -69,6 +73,10 @@ func Authentication() gin.HandlerFunc {
 		// Check if token has the correct structure (header.payload.signature)
 		parts := strings.Split(tokenString, ".")
 		if len(parts) != 3 {
+			logger.WithFields(map[string]interface{}{
+				"path":       c.Request.URL.Path,
+				"parts_count": len(parts),
+			}).Warn("Authentication failed: malformed token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "malformed_token",
 				"message": fmt.Sprintf("JWT token must have 3 parts (header.payload.signature), got %d part(s)", len(parts)),
@@ -83,7 +91,7 @@ func Authentication() gin.HandlerFunc {
 		token, _, err := parser.ParseUnverified(tokenString, jwt.MapClaims{})
 
 		if err != nil {
-			fmt.Printf("[DEBUG] Token parse error: %v\n", err)
+			logger.Debugf("Token parse error: %v", err)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "invalid_token",
 				"message": fmt.Sprintf("Failed to parse token: %v", err),
@@ -113,6 +121,7 @@ func Authentication() gin.HandlerFunc {
 		// Validate expiration
 		if exp, ok := claims["exp"].(float64); ok {
 			if time.Now().Unix() > int64(exp) {
+				logger.WithField("path", c.Request.URL.Path).Warn("Authentication failed: token expired")
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 					"error":   "token_expired",
 					"message": "Token has expired",
@@ -126,6 +135,7 @@ func Authentication() gin.HandlerFunc {
 		if sub, ok := claims["sub"].(string); ok {
 			userId = sub
 		} else {
+			logger.WithField("path", c.Request.URL.Path).Warn("Authentication failed: missing user ID in token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "invalid_token",
 				"message": "Missing user ID in token",
@@ -137,6 +147,11 @@ func Authentication() gin.HandlerFunc {
 		c.Set("user_id", userId)
 		c.Set("token_claims", claims)
 
+		logger.WithFields(map[string]interface{}{
+			"user_id": userId,
+			"path":    c.Request.URL.Path,
+		}).Debug("Authentication successful")
+
 		c.Next()
 	}
 }
@@ -144,10 +159,13 @@ func Authentication() gin.HandlerFunc {
 // AuthenticationWithAuth0 middleware validates Auth0 JWT tokens with full verification
 func AuthenticationWithAuth0(config *Auth0Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		logger.Debug("AuthenticationWithAuth0 middleware invoked")
+
 		// Extract the bearer token from the Authorization header
 		authHeader := c.GetHeader("Authorization")
 		const prefix = "Bearer "
 		if len(authHeader) < len(prefix) || !strings.HasPrefix(authHeader, prefix) {
+			logger.WithField("path", c.Request.URL.Path).Warn("Auth0 authentication failed: missing or invalid authorization header")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "unauthorized",
 				"message": "Missing or invalid authorization header",
@@ -174,6 +192,10 @@ func AuthenticationWithAuth0(config *Auth0Config) gin.HandlerFunc {
 		})
 
 		if err != nil {
+			logger.WithFields(map[string]interface{}{
+				"path":  c.Request.URL.Path,
+				"error": err.Error(),
+			}).Warn("Auth0 authentication failed: token validation error")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "invalid_token",
 				"message": err.Error(),

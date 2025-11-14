@@ -13,6 +13,9 @@ type Config struct {
 	// Server configuration
 	Port string
 
+	// Logging configuration
+	LogLevel string
+
 	// AWS configuration
 	AWSRegion     string
 	AWSAccountID  string
@@ -47,6 +50,9 @@ func New() *Config {
 	cfg := &Config{
 		// Server configuration
 		Port: getEnvOrDefault("PORT", "3001"),
+
+		// Logging configuration
+		LogLevel: getEnvOrDefault("LOG_LEVEL", "INFO"),
 
 		// AWS configuration
 		AWSRegion:    getEnvOrDefault("AWS_REGION", "us-east-1"),
@@ -133,6 +139,11 @@ func getEnvOrDefault(key, defaultValue string) string {
 // GetPort returns the server port
 func (c *Config) GetPort() string {
 	return c.Port
+}
+
+// GetLogLevel returns the logging level
+func (c *Config) GetLogLevel() string {
+	return c.LogLevel
 }
 
 // GetAWSRegion returns the AWS region

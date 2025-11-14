@@ -2,6 +2,8 @@ package queue
 
 import (
 	"sync"
+
+	"github.com/imyashkale/buildserver/internal/logger"
 )
 
 // BuildJob represents a build job in the queue
@@ -30,10 +32,24 @@ func NewJobQueue(bufferSize int) *JobQueue {
 
 // Enqueue adds a job to the queue
 func (jq *JobQueue) Enqueue(job *BuildJob) error {
+	logger.WithFields(map[string]interface{}{
+		"deployment_id": job.DeploymentID,
+		"server_id":     job.ServerID,
+		"user_id":       job.UserID,
+	}).Debug("Enqueueing build job")
+
 	select {
 	case jq.jobs <- job:
+		logger.WithFields(map[string]interface{}{
+			"deployment_id": job.DeploymentID,
+			"server_id":     job.ServerID,
+		}).Info("Build job enqueued successfully")
 		return nil
 	case <-jq.done:
+		logger.WithFields(map[string]interface{}{
+			"deployment_id": job.DeploymentID,
+			"server_id":     job.ServerID,
+		}).Warn("Failed to enqueue job: queue is closed")
 		return ErrQueueClosed
 	}
 }
@@ -98,12 +114,32 @@ func (wp *WorkerPool) worker(handler func(*BuildJob) error) {
 		select {
 		case job, ok := <-wp.jobs:
 			if !ok {
+				logger.Debug("Worker exiting: jobs channel closed")
 				return
 			}
 			if job != nil {
-				_ = handler(job)
+				logger.WithFields(map[string]interface{}{
+					"deployment_id": job.DeploymentID,
+					"server_id":     job.ServerID,
+					"user_id":       job.UserID,
+				}).Info("Worker processing build job")
+
+				err := handler(job)
+				if err != nil {
+					logger.WithFields(map[string]interface{}{
+						"deployment_id": job.DeploymentID,
+						"server_id":     job.ServerID,
+						"error":         err.Error(),
+					}).Error("Worker failed to process build job")
+				} else {
+					logger.WithFields(map[string]interface{}{
+						"deployment_id": job.DeploymentID,
+						"server_id":     job.ServerID,
+					}).Info("Worker completed build job successfully")
+				}
 			}
 		case <-wp.done:
+			logger.Debug("Worker exiting: stop signal received")
 			return
 		}
 	}

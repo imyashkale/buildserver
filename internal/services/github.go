@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/imyashkale/buildserver/internal/logger"
 	"github.com/imyashkale/buildserver/internal/models"
 	"github.com/imyashkale/buildserver/internal/repository"
 )
@@ -86,6 +87,8 @@ func (s *GitHubService) VerifyStateToken(ctx context.Context, stateToken string,
 
 // GetGitHubUser fetches user information from GitHub API
 func (s *GitHubService) GetGitHubUser(ctx context.Context, accessToken string) (*models.GitHubUser, error) {
+	logger.Debug("Fetching GitHub user information")
+
 	req, err := http.NewRequestWithContext(
 		ctx,
 		"GET",
@@ -93,6 +96,7 @@ func (s *GitHubService) GetGitHubUser(ctx context.Context, accessToken string) (
 		nil,
 	)
 	if err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to create GitHub API request")
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -102,19 +106,23 @@ func (s *GitHubService) GetGitHubUser(ctx context.Context, accessToken string) (
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.WithField("error", err.Error()).Error("GitHub API request failed")
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		logger.WithField("status_code", resp.StatusCode).Warn("GitHub API returned non-OK status")
 		return nil, fmt.Errorf("%w: status code %d", ErrGitHubAPIError, resp.StatusCode)
 	}
 
 	var user models.GitHubUser
 	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to decode GitHub user response")
 		return nil, fmt.Errorf("failed to decode user: %w", err)
 	}
 
+	logger.WithField("username", user.Login).Info("GitHub user information fetched successfully")
 	return &user, nil
 }
 
@@ -127,6 +135,11 @@ func (s *GitHubService) GetUserRepositories(ctx context.Context, accessToken str
 		perPage = 30
 	}
 
+	logger.WithFields(map[string]interface{}{
+		"page":     page,
+		"per_page": perPage,
+	}).Debug("Fetching user repositories from GitHub")
+
 	url := fmt.Sprintf(
 		"https://api.github.com/user/repos?page=%d&per_page=%d&sort=updated&affiliation=owner,collaborator",
 		page,
@@ -135,6 +148,7 @@ func (s *GitHubService) GetUserRepositories(ctx context.Context, accessToken str
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to create GitHub API request")
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
@@ -144,19 +158,23 @@ func (s *GitHubService) GetUserRepositories(ctx context.Context, accessToken str
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
+		logger.WithField("error", err.Error()).Error("GitHub API request for repositories failed")
 		return nil, fmt.Errorf("failed to get repositories: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		logger.WithField("status_code", resp.StatusCode).Warn("GitHub API returned non-OK status for repositories")
 		return nil, fmt.Errorf("%w: status code %d", ErrGitHubAPIError, resp.StatusCode)
 	}
 
 	var repos []models.GitHubRepository
 	if err := json.NewDecoder(resp.Body).Decode(&repos); err != nil {
+		logger.WithField("error", err.Error()).Error("Failed to decode GitHub repositories response")
 		return nil, fmt.Errorf("failed to decode repositories: %w", err)
 	}
 
+	logger.WithField("repo_count", len(repos)).Info("GitHub repositories fetched successfully")
 	return repos, nil
 }
 

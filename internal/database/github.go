@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/imyashkale/buildserver/internal/logger"
 	"github.com/imyashkale/buildserver/internal/models"
 )
 
@@ -77,6 +78,7 @@ func (db *GitHubDB) CreateGitHubConnection(ctx context.Context, conn *models.Git
 
 // GetGitHubConnectionByUserId retrieves a GitHub connection by Auth0 user ID
 func (db *GitHubDB) GetGitHubConnectionByUserId(ctx context.Context, userId string) (*models.GitHubConnection, error) {
+	logger.WithField("user_id", userId).Debug("Retrieving GitHub connection from DynamoDB")
 
 	// For simplicity, we'll use Scan with filter
 	result, err := db.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
@@ -89,18 +91,32 @@ func (db *GitHubDB) GetGitHubConnectionByUserId(ctx context.Context, userId stri
 
 	// Handle errors
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"user_id": userId,
+			"error":   err.Error(),
+		}).Error("Failed to query GitHub connection from DynamoDB")
 		return nil, fmt.Errorf("failed to query github connection: %w", err)
 	}
 
 	if len(result.Items) == 0 {
+		logger.WithField("user_id", userId).Warn("GitHub connection not found in DynamoDB")
 		return nil, ErrGitHubConnectionNotFound
 	}
 
 	var conn models.GitHubConnection
 	err = attributevalue.UnmarshalMap(result.Items[0], &conn)
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"user_id": userId,
+			"error":   err.Error(),
+		}).Error("Failed to unmarshal GitHub connection")
 		return nil, fmt.Errorf("failed to unmarshal github connection: %w", err)
 	}
+
+	logger.WithFields(map[string]interface{}{
+		"user_id":         userId,
+		"github_username": conn.GitHubUsername,
+	}).Debug("GitHub connection retrieved successfully from DynamoDB")
 
 	return &conn, nil
 }

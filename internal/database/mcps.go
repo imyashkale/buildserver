@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/imyashkale/buildserver/internal/logger"
 	"github.com/imyashkale/buildserver/internal/models"
 )
 
@@ -79,6 +80,7 @@ func (ms *MCPServer) CreateMCP(ctx context.Context, server *models.MCPServer) er
 
 // GetMCP retrieves an MCP server by ID from DynamoDB
 func (ms *MCPServer) GetMCP(ctx context.Context, id string) (*models.MCPServer, error) {
+	logger.WithField("server_id", id).Debug("Retrieving MCP server from DynamoDB")
 
 	// Get the item from DynamoDB
 	result, err := ms.client.DynamoDB.GetItem(ctx, &dynamodb.GetItemInput{
@@ -89,18 +91,32 @@ func (ms *MCPServer) GetMCP(ctx context.Context, id string) (*models.MCPServer, 
 	})
 
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"server_id": id,
+			"error":     err.Error(),
+		}).Error("Failed to get MCP server from DynamoDB")
 		return nil, fmt.Errorf("failed to get MCP server: %w", err)
 	}
 
 	if result.Item == nil {
+		logger.WithField("server_id", id).Warn("MCP server not found in DynamoDB")
 		return nil, ErrNotFound
 	}
 
 	// Unmarshal the item into MCPServer domain model
 	server, err := ms.unmarshalMCPServer(result.Item)
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"server_id": id,
+			"error":     err.Error(),
+		}).Error("Failed to unmarshal MCP server")
 		return nil, fmt.Errorf("failed to unmarshal MCP server: %w", err)
 	}
+
+	logger.WithFields(map[string]interface{}{
+		"server_id": id,
+		"name":      server.Name,
+	}).Debug("MCP server retrieved successfully from DynamoDB")
 
 	return server, nil
 }
@@ -156,6 +172,11 @@ func (ms *MCPServer) GetMCPsByUserId(ctx context.Context, userId string) ([]*mod
 
 // UpdateMCP updates an existing MCP server in DynamoDB
 func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) error {
+	logger.WithFields(map[string]interface{}{
+		"server_id": server.Id,
+		"name":      server.Name,
+	}).Debug("Updating MCP server in DynamoDB")
+
 	// Update the MCP server using UpdateItem
 	_, err := ms.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(ms.tableName),
@@ -164,33 +185,42 @@ func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) er
 		},
 		UpdateExpression: aws.String("SET #name = :name, #desc = :desc, #repo = :repo, #status = :status, #envs = :envs, #ecrRepoName = :ecrRepoName, #ecrRepoURI = :ecrRepoURI, UpdatedAt = :updated_at"),
 		ExpressionAttributeNames: map[string]string{
-			"#name":          "Name",
-			"#desc":          "Description",
-			"#repo":          "Repository",
-			"#status":        "Status",
-			"#envs":          "Envs",
-			"#ecrRepoName":   "ECRRepositoryName",
-			"#ecrRepoURI":    "ECRRepositoryURI",
+			"#name":        "Name",
+			"#desc":        "Description",
+			"#repo":        "Repository",
+			"#status":      "Status",
+			"#envs":        "Envs",
+			"#ecrRepoName": "ECRRepositoryName",
+			"#ecrRepoURI":  "ECRRepositoryURI",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":name":          &types.AttributeValueMemberS{Value: server.Name},
-			":desc":          &types.AttributeValueMemberS{Value: server.Description},
-			":repo":          &types.AttributeValueMemberS{Value: server.Repository},
-			":status":        &types.AttributeValueMemberS{Value: server.Status},
-			":updated_at":    &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", server.UpdatedAt.Unix())},
-			":ecrRepoName":   &types.AttributeValueMemberS{Value: server.ECRRepositoryName},
-			":ecrRepoURI":    &types.AttributeValueMemberS{Value: server.ECRRepositoryURI},
+			":name":        &types.AttributeValueMemberS{Value: server.Name},
+			":desc":        &types.AttributeValueMemberS{Value: server.Description},
+			":repo":        &types.AttributeValueMemberS{Value: server.Repository},
+			":status":      &types.AttributeValueMemberS{Value: server.Status},
+			":updated_at":  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", server.UpdatedAt.Unix())},
+			":ecrRepoName": &types.AttributeValueMemberS{Value: server.ECRRepositoryName},
+			":ecrRepoURI":  &types.AttributeValueMemberS{Value: server.ECRRepositoryURI},
 		},
 	})
-
 
 	if err != nil {
 		var ccf *types.ConditionalCheckFailedException
 		if errors.As(err, &ccf) {
+			logger.WithField("server_id", server.Id).Warn("MCP server not found during update")
 			return ErrNotFound
 		}
+		logger.WithFields(map[string]interface{}{
+			"server_id": server.Id,
+			"error":     err.Error(),
+		}).Error("Failed to update MCP server in DynamoDB")
 		return fmt.Errorf("failed to update MCP server: %w", err)
 	}
+
+	logger.WithFields(map[string]interface{}{
+		"server_id": server.Id,
+		"name":      server.Name,
+	}).Info("MCP server updated successfully in DynamoDB")
 
 	return nil
 }
