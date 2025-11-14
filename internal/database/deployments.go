@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -29,63 +28,6 @@ func NewDeploymentOperations(client *Client, tableName string) *DeploymentOperat
 	}
 }
 
-// CreateDeployment creates or updates a deployment in DynamoDB
-func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment *models.Deployment) error {
-	logger.WithFields(map[string]interface{}{
-		"server_id":     deployment.ServerId,
-		"deployment_id": deployment.DeploymentId,
-		"user_id":       deployment.UserId,
-	}).Debug("Creating deployment in DynamoDB")
-
-	// Marshal the deployment into a DynamoDB attribute value map
-	av, err := attributevalue.MarshalMap(map[string]interface{}{
-		"ServerId":     deployment.ServerId,
-		"DeploymentId": deployment.DeploymentId,
-		"UserId":       deployment.UserId,
-		"Branch":       deployment.Branch,
-		"CommitHash":   deployment.CommitHash,
-		"Status":       deployment.Status,
-		"Stages":       deployment.Stages,
-		"Logs":         deployment.BuildLogs,
-		"ImageURI":     deployment.ImageURI,
-		"CreatedAt":    deployment.CreatedAt.Unix(),
-		"UpdatedAt":    deployment.UpdatedAt.Unix(),
-	})
-
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"server_id":     deployment.ServerId,
-			"deployment_id": deployment.DeploymentId,
-			"error":         err.Error(),
-		}).Error("Failed to marshal deployment")
-		return fmt.Errorf("failed to marshal deployment: %w", err)
-	}
-
-	log.Println("Creating/updating deployment for server ID:", deployment.ServerId)
-
-	// Put item (will overwrite if exists with same server_id)
-	_, err = do.client.DynamoDB.PutItem(ctx, &dynamodb.PutItemInput{
-		TableName: aws.String(do.tableName),
-		Item:      av,
-	})
-
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"server_id":     deployment.ServerId,
-			"deployment_id": deployment.DeploymentId,
-			"error":         err.Error(),
-		}).Error("Failed to create deployment in DynamoDB")
-		return fmt.Errorf("failed to create deployment: %w", err)
-	}
-
-	logger.WithFields(map[string]interface{}{
-		"server_id":     deployment.ServerId,
-		"deployment_id": deployment.DeploymentId,
-	}).Info("Deployment created successfully in DynamoDB")
-
-	return nil
-}
-
 // GetDeployment retrieves a deployment by server ID and deployment ID from DynamoDB
 func (do *DeploymentOperations) GetDeployment(ctx context.Context, serverId, deploymentId string) (*models.Deployment, error) {
 	logger.WithFields(map[string]interface{}{
@@ -93,11 +35,10 @@ func (do *DeploymentOperations) GetDeployment(ctx context.Context, serverId, dep
 		"deployment_id": deploymentId,
 	}).Debug("Retrieving deployment from DynamoDB")
 
-	// Query by ServerId (partition key) and filter by DeploymentId
+	// Query by ServerId (partition key) and DeploymentId (sort key)
 	result, err := do.client.DynamoDB.Query(ctx, &dynamodb.QueryInput{
 		TableName:              aws.String(do.tableName),
-		KeyConditionExpression: aws.String("ServerId = :serverId"),
-		FilterExpression:       aws.String("DeploymentId = :deploymentId"),
+		KeyConditionExpression: aws.String("ServerId = :serverId AND DeploymentId = :deploymentId"),
 		ExpressionAttributeValues: map[string]types.AttributeValue{
 			":serverId":     &types.AttributeValueMemberS{Value: serverId},
 			":deploymentId": &types.AttributeValueMemberS{Value: deploymentId},
@@ -223,18 +164,17 @@ func (do *DeploymentOperations) UpdateDeploymentStatus(ctx context.Context, serv
 	_, err := do.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(do.tableName),
 		Key: map[string]types.AttributeValue{
-			"ServerId": &types.AttributeValueMemberS{Value: serverId},
+			"ServerId":     &types.AttributeValueMemberS{Value: serverId},
+			"DeploymentId": &types.AttributeValueMemberS{Value: deploymentId},
 		},
 		UpdateExpression: aws.String("SET #status = :status, UpdatedAt = :updated_at"),
 		ExpressionAttributeNames: map[string]string{
 			"#status": "Status",
 		},
 		ExpressionAttributeValues: map[string]types.AttributeValue{
-			":status":       &types.AttributeValueMemberS{Value: status},
-			":updated_at":   &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", time.Now().Unix())},
-			":deploymentId": &types.AttributeValueMemberS{Value: deploymentId},
+			":status":     &types.AttributeValueMemberS{Value: status},
+			":updated_at": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", time.Now().Unix())},
 		},
-		ConditionExpression: aws.String("DeploymentId = :deploymentId"),
 	})
 
 	if err != nil {
@@ -270,23 +210,22 @@ func (do *DeploymentOperations) UpdateDeployment(ctx context.Context, deployment
 	logsAv, _ := attributevalue.Marshal(deployment.BuildLogs)
 
 	exprAttrVals := map[string]types.AttributeValue{
-		":status":       &types.AttributeValueMemberS{Value: deployment.Status},
-		":stages":       stagesAv,
-		":logs":         logsAv,
-		":imageUri":     &types.AttributeValueMemberS{Value: deployment.ImageURI},
-		":updated_at":   &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", deployment.UpdatedAt.Unix())},
-		":deploymentId": &types.AttributeValueMemberS{Value: deployment.DeploymentId},
+		":status":     &types.AttributeValueMemberS{Value: deployment.Status},
+		":stages":     stagesAv,
+		":logs":       logsAv,
+		":imageUri":   &types.AttributeValueMemberS{Value: deployment.ImageURI},
+		":updated_at": &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", deployment.UpdatedAt.Unix())},
 	}
 
 	_, err := do.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(do.tableName),
 		Key: map[string]types.AttributeValue{
-			"ServerId": &types.AttributeValueMemberS{Value: deployment.ServerId},
+			"ServerId":     &types.AttributeValueMemberS{Value: deployment.ServerId},
+			"DeploymentId": &types.AttributeValueMemberS{Value: deployment.DeploymentId},
 		},
 		UpdateExpression:          aws.String(updateExpr),
 		ExpressionAttributeNames:  exprAttrNames,
 		ExpressionAttributeValues: exprAttrVals,
-		ConditionExpression:       aws.String("DeploymentId = :deploymentId"),
 	})
 
 	if err != nil {

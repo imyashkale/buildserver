@@ -47,6 +47,7 @@ func (ms *MCPServer) GetMCP(ctx context.Context, serverId string) (*models.MCPSe
 		},
 	})
 
+	// Handle potential errors	
 	if err != nil {
 		logger.WithFields(map[string]interface{}{
 			"server_id": serverId,
@@ -55,6 +56,7 @@ func (ms *MCPServer) GetMCP(ctx context.Context, serverId string) (*models.MCPSe
 		return nil, fmt.Errorf("failed to get MCP server: %w", err)
 	}
 
+	// Check if item was found
 	if result.Item == nil {
 		logger.WithField("server_id", serverId).Warn("MCP server not found in DynamoDB")
 		return nil, ErrNotFound
@@ -80,6 +82,8 @@ func (ms *MCPServer) GetMCP(ctx context.Context, serverId string) (*models.MCPSe
 
 // GetAllMCPs retrieves all MCP servers from DynamoDB
 func (ms *MCPServer) GetAllMCPs(ctx context.Context) ([]*models.MCPServer, error) {
+
+	// Scan the DynamoDB table to get all MCP servers
 	result, err := ms.client.DynamoDB.Scan(ctx, &dynamodb.ScanInput{
 		TableName: aws.String(ms.client.TableName),
 	})

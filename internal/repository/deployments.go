@@ -9,7 +9,6 @@ import (
 
 // DeploymentRepository defines the interface for deployment operations
 type DeploymentRepository interface {
-	Create(ctx context.Context, deployment *models.Deployment) error
 	Get(ctx context.Context, serverId, deploymentId string) (*models.Deployment, error)
 	GetAll(ctx context.Context) ([]*models.Deployment, error)
 	GetByUserId(ctx context.Context, userId string) ([]*models.Deployment, error)
@@ -28,11 +27,6 @@ func NewDeploymentRepository(db *database.DeploymentOperations) DeploymentReposi
 	return &dynamoDeploymentRepository{
 		db: db,
 	}
-}
-
-// Create creates a new deployment
-func (r *dynamoDeploymentRepository) Create(ctx context.Context, deployment *models.Deployment) error {
-	return r.db.CreateDeployment(ctx, deployment)
 }
 
 // Get retrieves a deployment by server ID and commit hash
