@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,6 +10,7 @@ import (
 	"github.com/imyashkale/buildserver/internal/config"
 	"github.com/imyashkale/buildserver/internal/database"
 	"github.com/imyashkale/buildserver/internal/handlers"
+	"github.com/imyashkale/buildserver/internal/logger"
 	"github.com/imyashkale/buildserver/internal/queue"
 	"github.com/imyashkale/buildserver/internal/repository"
 	"github.com/imyashkale/buildserver/internal/router"
@@ -23,37 +23,41 @@ func main() {
 
 	// Load application configuration
 	cfg := config.New()
-	log.Println("Configuration loaded successfully")
+
+	// Initialize logger with configured log level
+	logger.Init(cfg.LogLevel)
+
+	logger.Infof("Configuration loaded successfully - LogLevel: %s", cfg.LogLevel)
 
 	// Initialize database configuration
 	dbConfig := database.NewConfig(cfg)
 
-	log.Printf("Initializing DynamoDB client for table: %s in region: %s", dbConfig.TableName, dbConfig.Region)
+	logger.Infof("Initializing DynamoDB client for table: %s in region: %s", dbConfig.TableName, dbConfig.Region)
 
 	// Create DynamoDB client
 	dbClient, err := database.NewClient(ctx, dbConfig)
 	if err != nil {
-		log.Fatalf("Failed to initialize DynamoDB client: %v", err)
+		logger.Fatalf("Failed to initialize DynamoDB client: %v", err)
 	}
 
-	log.Println("DynamoDB client initialized successfully")
+	logger.Info("DynamoDB client initialized successfully")
 
 	// Initialize database operations
 	mdb := database.NewMCPServer(dbClient, dbClient.TableName)
 
 	// Initialize GitHub database operations
 	githubDB := database.NewGitHubDB(dbClient, cfg.GitHubConnectionsTableName, cfg.GitHubOAuthStatesTableName)
-	log.Println("GitHub database initialized")
+	logger.Info("GitHub database initialized")
 
 	// Initialize deployment database operations
 	deploymentDB := database.NewDeploymentOperations(dbClient, cfg.DeploymentsTableName)
-	log.Println("Deployment database initialized")
+	logger.Info("Deployment database initialized")
 
 	// Initialize repositories
 	mrepo := repository.NewMCPRepository(mdb)
 	githubRepo := repository.NewGitHubRepository(githubDB)
 	deploymentRepo := repository.NewDeploymentRepository(deploymentDB)
-	log.Println("Repositories initialized with DynamoDB backend")
+	logger.Info("Repositories initialized with DynamoDB backend")
 
 	// Initialize GitHub service with config values
 	githubService := services.NewGitHubService(
@@ -64,35 +68,35 @@ func main() {
 		cfg.GitHubTokenEncryptionKey,
 	)
 
-	log.Println("GitHub service initialized")
+	logger.Info("GitHub service initialized")
 
 	// Initialize job queue (with buffer size of 100)
 	jobQueue := queue.NewJobQueue(100)
-	log.Println("Job queue initialized")
+	logger.Info("Job queue initialized")
 
 	// Load AWS configuration for ECR
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
-		log.Fatalf("Failed to load AWS configuration: %v", err)
+		logger.Fatalf("Failed to load AWS configuration: %v", err)
 	}
 
 	// Initialize ECR service
 	ecrService := services.NewECRService(awsCfg, cfg.AWSAccountID)
-	log.Println("ECR service initialized")
+	logger.Info("ECR service initialized")
 
 	// Initialize pipeline service
 	pipelineService := services.NewPipelineService(deploymentRepo, githubService, ecrService, mrepo, githubRepo)
-	log.Println("Pipeline service initialized")
+	logger.Info("Pipeline service initialized")
 
 	// Initialize worker pool (5 concurrent workers)
 	workerPool := queue.NewWorkerPool(jobQueue, 5)
-	log.Println("Worker pool created with 5 concurrent workers")
+	logger.Info("Worker pool created with 5 concurrent workers")
 
 	// Start workers
 	workerPool.Start(func(job *queue.BuildJob) error {
 		return pipelineService.ExecuteBuild(ctx, job)
 	})
-	log.Println("Build workers started")
+	logger.Info("Build workers started")
 
 	// Initialize handlers
 	healthHandler := handlers.NewHealthHandler()
@@ -104,32 +108,34 @@ func main() {
 		pipelineService,
 		jobQueue,
 	)
-	log.Println("Handlers initialized")
+	logger.Info("Handlers initialized")
 
 	// Setup router
 	r := router.Setup(healthHandler, buildHandler)
+	logger.Info("Router setup completed")
 
 	// Setup graceful shutdown
 	go func() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 		<-sigChan
-		log.Println("Shutting down server gracefully...")
+		logger.Info("Shutdown signal received")
 
 		// Close job queue to stop accepting new jobs
 		jobQueue.Close()
-		log.Println("Job queue closed, waiting for workers to finish...")
+		logger.Info("Job queue closed, waiting for workers to finish")
 
 		// Wait for workers to finish processing current jobs
 		workerPool.Wait()
-		log.Println("All workers stopped")
+		logger.Info("All workers stopped gracefully")
 
+		logger.Info("Server shutdown complete")
 		os.Exit(0)
 	}()
 
 	// Start server
-	log.Printf("Starting server on :%s", cfg.Port)
+	logger.Infof("Starting HTTP server on port %s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {
-		log.Fatal("Failed to start server:", err)
+		logger.Fatalf("Failed to start server: %v", err)
 	}
 }

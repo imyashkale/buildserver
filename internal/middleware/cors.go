@@ -1,6 +1,9 @@
 package middleware
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+	"github.com/imyashkale/buildserver/internal/logger"
+)
 
 // CORS returns a middleware that handles CORS
 func CORS() gin.HandlerFunc {
@@ -11,6 +14,11 @@ func CORS() gin.HandlerFunc {
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
 		if c.Request.Method == "OPTIONS" {
+			logger.WithFields(map[string]interface{}{
+				"path":   c.Request.URL.Path,
+				"method": c.Request.Method,
+				"origin": c.Request.Header.Get("Origin"),
+			}).Debug("CORS preflight request handled")
 			c.AbortWithStatus(204)
 			return
 		}

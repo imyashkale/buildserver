@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/imyashkale/buildserver/internal/logger"
 	"github.com/imyashkale/buildserver/internal/models"
 )
 
@@ -30,6 +31,12 @@ func NewDeploymentOperations(client *Client, tableName string) *DeploymentOperat
 
 // CreateDeployment creates or updates a deployment in DynamoDB
 func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment *models.Deployment) error {
+	logger.WithFields(map[string]interface{}{
+		"server_id":     deployment.ServerId,
+		"deployment_id": deployment.DeploymentId,
+		"user_id":       deployment.UserId,
+	}).Debug("Creating deployment in DynamoDB")
+
 	// Marshal the deployment into a DynamoDB attribute value map
 	av, err := attributevalue.MarshalMap(map[string]interface{}{
 		"ServerId":     deployment.ServerId,
@@ -43,6 +50,11 @@ func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment
 	})
 
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"server_id":     deployment.ServerId,
+			"deployment_id": deployment.DeploymentId,
+			"error":         err.Error(),
+		}).Error("Failed to marshal deployment")
 		return fmt.Errorf("failed to marshal deployment: %w", err)
 	}
 
@@ -55,14 +67,28 @@ func (do *DeploymentOperations) CreateDeployment(ctx context.Context, deployment
 	})
 
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"server_id":     deployment.ServerId,
+			"deployment_id": deployment.DeploymentId,
+			"error":         err.Error(),
+		}).Error("Failed to create deployment in DynamoDB")
 		return fmt.Errorf("failed to create deployment: %w", err)
 	}
+
+	logger.WithFields(map[string]interface{}{
+		"server_id":     deployment.ServerId,
+		"deployment_id": deployment.DeploymentId,
+	}).Info("Deployment created successfully in DynamoDB")
 
 	return nil
 }
 
 // GetDeployment retrieves a deployment by server ID and deployment ID from DynamoDB
 func (do *DeploymentOperations) GetDeployment(ctx context.Context, serverId, deploymentId string) (*models.Deployment, error) {
+	logger.WithFields(map[string]interface{}{
+		"server_id":     serverId,
+		"deployment_id": deploymentId,
+	}).Debug("Retrieving deployment from DynamoDB")
 
 	// Query by ServerId (partition key) and filter by DeploymentId
 	result, err := do.client.DynamoDB.Query(ctx, &dynamodb.QueryInput{
@@ -76,18 +102,38 @@ func (do *DeploymentOperations) GetDeployment(ctx context.Context, serverId, dep
 	})
 
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"server_id":     serverId,
+			"deployment_id": deploymentId,
+			"error":         err.Error(),
+		}).Error("Failed to query deployment from DynamoDB")
 		return nil, fmt.Errorf("failed to get deployment: %w", err)
 	}
 
 	if len(result.Items) == 0 {
+		logger.WithFields(map[string]interface{}{
+			"server_id":     serverId,
+			"deployment_id": deploymentId,
+		}).Warn("Deployment not found in DynamoDB")
 		return nil, ErrNotFound
 	}
 
 	// Unmarshal the first item into Deployment domain model
 	deployment, err := do.unmarshalDeployment(result.Items[0])
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"server_id":     serverId,
+			"deployment_id": deploymentId,
+			"error":         err.Error(),
+		}).Error("Failed to unmarshal deployment")
 		return nil, fmt.Errorf("failed to unmarshal deployment: %w", err)
 	}
+
+	logger.WithFields(map[string]interface{}{
+		"server_id":     serverId,
+		"deployment_id": deploymentId,
+		"status":        deployment.Status,
+	}).Debug("Deployment retrieved successfully from DynamoDB")
 
 	return deployment, nil
 }
@@ -201,6 +247,12 @@ func (do *DeploymentOperations) UpdateDeploymentStatus(ctx context.Context, serv
 
 // UpdateDeployment updates a deployment with all fields including stages and logs
 func (do *DeploymentOperations) UpdateDeployment(ctx context.Context, deployment *models.Deployment) error {
+	logger.WithFields(map[string]interface{}{
+		"server_id":     deployment.ServerId,
+		"deployment_id": deployment.DeploymentId,
+		"status":        deployment.Status,
+	}).Debug("Updating deployment in DynamoDB")
+
 	// Prepare the attributes to update
 	updateExpr := "SET #status = :status, #stages = :stages, #logs = :logs, #imageUri = :imageUri, UpdatedAt = :updated_at"
 	exprAttrNames := map[string]string{
@@ -237,10 +289,25 @@ func (do *DeploymentOperations) UpdateDeployment(ctx context.Context, deployment
 	if err != nil {
 		var ccf *types.ConditionalCheckFailedException
 		if errors.As(err, &ccf) {
+			logger.WithFields(map[string]interface{}{
+				"server_id":     deployment.ServerId,
+				"deployment_id": deployment.DeploymentId,
+			}).Warn("Deployment not found during update")
 			return ErrNotFound
 		}
+		logger.WithFields(map[string]interface{}{
+			"server_id":     deployment.ServerId,
+			"deployment_id": deployment.DeploymentId,
+			"error":         err.Error(),
+		}).Error("Failed to update deployment in DynamoDB")
 		return fmt.Errorf("failed to update deployment: %w", err)
 	}
+
+	logger.WithFields(map[string]interface{}{
+		"server_id":     deployment.ServerId,
+		"deployment_id": deployment.DeploymentId,
+		"status":        deployment.Status,
+	}).Info("Deployment updated successfully in DynamoDB")
 
 	return nil
 }
