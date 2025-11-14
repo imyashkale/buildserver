@@ -104,8 +104,6 @@ func main() {
 		mrepo,
 		deploymentRepo,
 		githubRepo,
-		githubService,
-		pipelineService,
 		jobQueue,
 	)
 	logger.Info("Handlers initialized")

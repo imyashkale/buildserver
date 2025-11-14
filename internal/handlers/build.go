@@ -1,28 +1,20 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 
 	"github.com/gin-gonic/gin"
 	"github.com/imyashkale/buildserver/internal/logger"
 	"github.com/imyashkale/buildserver/internal/queue"
 	"github.com/imyashkale/buildserver/internal/repository"
-	"github.com/imyashkale/buildserver/internal/services"
-	"gopkg.in/yaml.v2"
 )
 
 // BuildHandler handles build-related requests
 type BuildHandler struct {
-	mcpRepo         repository.MCPRepository
-	deploymentRepo  repository.DeploymentRepository
-	githubRepo      repository.GitHubRepository
-	githubService   *services.GitHubService
-	pipelineService *services.PipelineService
-	jobQueue        *queue.JobQueue
+	mcpRepo        repository.MCPRepository
+	deploymentRepo repository.DeploymentRepository
+	githubRepo     repository.GitHubRepository
+	jobQueue       *queue.JobQueue
 }
 
 // NewBuildHandler creates a new build handler
@@ -30,17 +22,13 @@ func NewBuildHandler(
 	mcpRepo repository.MCPRepository,
 	deploymentRepo repository.DeploymentRepository,
 	githubRepo repository.GitHubRepository,
-	githubService *services.GitHubService,
-	pipelineService *services.PipelineService,
 	jobQueue *queue.JobQueue,
 ) *BuildHandler {
 	return &BuildHandler{
-		mcpRepo:         mcpRepo,
-		deploymentRepo:  deploymentRepo,
-		githubRepo:      githubRepo,
-		githubService:   githubService,
-		pipelineService: pipelineService,
-		jobQueue:        jobQueue,
+		mcpRepo:        mcpRepo,
+		deploymentRepo: deploymentRepo,
+		githubRepo:     githubRepo,
+		jobQueue:       jobQueue,
 	}
 }
 
@@ -207,27 +195,8 @@ func (h *BuildHandler) InitiateBuild(c *gin.Context) {
 		CommitHash:   deployment.CommitHash,
 	}
 
-	// Execute build synchronously for testing purposes
-	logger.WithFields(map[string]interface{}{
-		"user_id":       userIdStr,
-		"server_id":     serverId,
-		"deployment_id": deploymentId,
-	}).Info("Executing build pipeline")
-
-	err = h.pipelineService.ExecuteBuild(ctx, job)
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"user_id":       userIdStr,
-			"server_id":     serverId,
-			"deployment_id": deploymentId,
-			"error":         err.Error(),
-		}).Error("Build execution failed")
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "build_error",
-			"message": "Failed to execute build: " + err.Error(),
-		})
-		return
-	}
+	// Enqueue the job for asynchronous processing
+	h.jobQueue.Enqueue(job)
 
 	logger.WithFields(map[string]interface{}{
 		"user_id":       userIdStr,
@@ -359,75 +328,4 @@ func (h *BuildHandler) GetBuildDetails(c *gin.Context) {
 		"mcp":        mcp,
 		"deployment": deployment.ToResponse(),
 	})
-}
-
-// injectGitHubToken adds GitHub authentication to repository URL
-func (h *BuildHandler) injectGitHubToken(repoURL, token string) string {
-
-	// Handle HTTPS URLs
-	if len(repoURL) > 8 && repoURL[:8] == "https://" {
-		return fmt.Sprintf("https://x-access-token:%s@%s", token, repoURL[8:])
-	}
-
-	// Handle GitHub SSH URLs
-	if len(repoURL) > 10 && repoURL[:10] == "git@github" {
-		// SSH URLs don't need token injection, return as-is
-		return repoURL
-	}
-
-	return repoURL
-}
-
-// validateConfig checks if mhive.config.yaml is valid YAML
-func (h *BuildHandler) validateConfig(configPath string) error {
-	// Check if file exists
-	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return fmt.Errorf("mhive.config.yaml not found")
-	}
-
-	// Read the file
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to read mhive.config.yaml: %w", err)
-	}
-
-	// Validate YAML syntax
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("invalid YAML syntax: %w", err)
-	}
-
-	// Config is valid if we got here
-	return nil
-}
-
-// buildDockerImage builds a Docker image from the cloned repository
-func (h *BuildHandler) buildDockerImage(repoDir, imageName string) error {
-	logger.Infof("Starting Docker image build for image: %s", imageName)
-
-	// Check if Dockerfile exists
-	dockerfilePath := filepath.Join(repoDir, "Dockerfile")
-	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-		return fmt.Errorf("Dockerfile not found in repository")
-	}
-
-	// Build the Docker image with output logging
-	cmd := exec.Command("docker", "build", "-t", imageName, repoDir)
-
-	// Capture stdout and stderr
-	output, err := cmd.CombinedOutput()
-	if output != nil {
-		logger.WithField("image_name", imageName).Infof("Docker build output: %s", string(output))
-	}
-
-	if err != nil {
-		logger.WithFields(map[string]interface{}{
-			"image_name": imageName,
-			"error":      err.Error(),
-		}).Error("Docker build failed")
-		return fmt.Errorf("docker build failed: %w", err)
-	}
-
-	logger.WithField("image_name", imageName).Info("Docker build completed successfully")
-	return nil
 }

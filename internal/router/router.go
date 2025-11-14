@@ -31,7 +31,6 @@ func Setup(
 	build := v1.Group("/build")
 	{
 		build.POST("/:server_id/:deployment_id/initiate", buildHandler.InitiateBuild)
-		build.GET("/:server_id/:deployment_id", buildHandler.GetBuildDetails)
 	}
 
 	return router
