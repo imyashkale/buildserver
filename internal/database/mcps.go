@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -34,48 +33,6 @@ func NewMCPServer(client *Client, tableName string) *MCPServer {
 		client:    client,
 		tableName: tableName,
 	}
-}
-
-// CreateMCP creates a new MCP server in DynamoDB
-func (ms *MCPServer) CreateMCP(ctx context.Context, server *models.MCPServer) error {
-
-	// Marshal the MCP server into a DynamoDB attribute value map
-	av, err := attributevalue.MarshalMap(map[string]interface{}{
-		"ServerId":    server.ServerId,
-		"UserId":      server.UserId,
-		"Name":        server.Name,
-		"Description": server.Description,
-		"Repository":  server.Repository,
-		"Status":      server.Status,
-		"Envs":        server.EnvironmentVariables,
-		"ECRRepositoryName": server.ECRRepositoryName,
-		"ECRRepositoryURI":  server.ECRRepositoryURI,
-		"CreatedAt":   server.CreatedAt.Unix(),
-		"UpdatedAt":   server.UpdatedAt.Unix(),
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to marshal MCP server: %w", err)
-	}
-
-	log.Println("Creating MCP server with ServerId:", server.ServerId, server.Name)
-
-	// Check if item already exists
-	_, err = ms.client.DynamoDB.PutItem(ctx, &dynamodb.PutItemInput{
-
-		TableName: aws.String(ms.tableName),
-		Item:      av,
-	})
-
-	if err != nil {
-		var ccf *types.ConditionalCheckFailedException
-		if errors.As(err, &ccf) {
-			return ErrAlreadyExists
-		}
-		return fmt.Errorf("failed to create MCP server: %w", err)
-	}
-
-	return nil
 }
 
 // GetMCP retrieves an MCP server by ServerId from DynamoDB
