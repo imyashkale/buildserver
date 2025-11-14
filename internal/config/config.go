@@ -17,8 +17,8 @@ type Config struct {
 	LogLevel string
 
 	// AWS configuration
-	AWSRegion     string
-	AWSAccountID  string
+	AWSRegion    string
+	AWSAccountID string
 
 	// DynamoDB configuration
 	DynamoDBTableName          string

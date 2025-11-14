@@ -34,11 +34,6 @@ func (bl *BuildLogger) LogInfo(stage, message string) {
 	bl.log(stage, LevelInfo, message)
 }
 
-// LogWarning logs a warning level message
-func (bl *BuildLogger) LogWarning(stage, message string) {
-	bl.log(stage, LevelWarning, message)
-}
-
 // LogError logs an error level message
 func (bl *BuildLogger) LogError(stage, message string) {
 	bl.log(stage, LevelError, message)

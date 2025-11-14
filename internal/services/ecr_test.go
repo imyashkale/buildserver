@@ -272,10 +272,10 @@ func TestLoginToECR_EndpointValidation(t *testing.T) {
 // TestLoginToECR_TokenParsing tests correct parsing of base64 encoded token
 func TestLoginToECR_TokenParsing(t *testing.T) {
 	tests := []struct {
-		name           string
-		username       string
-		password       string
-		shouldSucceed  bool
+		name          string
+		username      string
+		password      string
+		shouldSucceed bool
 	}{
 		{
 			name:          "Standard AWS credentials",
@@ -436,10 +436,10 @@ func TestGetRepositoryURI(t *testing.T) {
 // TestGetRepositoryURI_DifferentRegions tests URI generation for various regions
 func TestGetRepositoryURI_DifferentRegions(t *testing.T) {
 	tests := []struct {
-		region       string
-		accountID    string
-		repoName     string
-		expectedURI  string
+		region      string
+		accountID   string
+		repoName    string
+		expectedURI string
 	}{
 		{
 			region:      "us-east-1",

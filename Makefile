@@ -1,6 +1,9 @@
 run:
 	go run cmd/main.go
 
+fmt:
+	go fmt
+
 build:
 	go build -o buildserver cmd/main.go
 

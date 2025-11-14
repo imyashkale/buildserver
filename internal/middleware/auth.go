@@ -74,7 +74,7 @@ func Authentication() gin.HandlerFunc {
 		parts := strings.Split(tokenString, ".")
 		if len(parts) != 3 {
 			logger.WithFields(map[string]interface{}{
-				"path":       c.Request.URL.Path,
+				"path":        c.Request.URL.Path,
 				"parts_count": len(parts),
 			}).Warn("Authentication failed: malformed token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{

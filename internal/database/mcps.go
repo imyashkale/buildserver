@@ -47,7 +47,7 @@ func (ms *MCPServer) GetMCP(ctx context.Context, serverId string) (*models.MCPSe
 		},
 	})
 
-	// Handle potential errors	
+	// Handle potential errors
 	if err != nil {
 		logger.WithFields(map[string]interface{}{
 			"server_id": serverId,
@@ -138,8 +138,18 @@ func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) er
 		"name":      server.Name,
 	}).Debug("Updating MCP server in DynamoDB")
 
+	// Marshal environment variables
+	envsList, err := attributevalue.MarshalList(server.EnvironmentVariables)
+	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"server_id": server.ServerId,
+			"error":     err.Error(),
+		}).Error("Failed to marshal environment variables")
+		return fmt.Errorf("failed to marshal environment variables: %w", err)
+	}
+
 	// Update the MCP server using UpdateItem
-	_, err := ms.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
+	_, err = ms.client.DynamoDB.UpdateItem(ctx, &dynamodb.UpdateItemInput{
 		TableName: aws.String(ms.tableName),
 		Key: map[string]types.AttributeValue{
 			"ServerId": &types.AttributeValueMemberS{Value: server.ServerId},
@@ -159,6 +169,7 @@ func (ms *MCPServer) UpdateMCP(ctx context.Context, server *models.MCPServer) er
 			":desc":        &types.AttributeValueMemberS{Value: server.Description},
 			":repo":        &types.AttributeValueMemberS{Value: server.Repository},
 			":status":      &types.AttributeValueMemberS{Value: server.Status},
+			":envs":        &types.AttributeValueMemberL{Value: envsList},
 			":updated_at":  &types.AttributeValueMemberN{Value: fmt.Sprintf("%d", server.UpdatedAt.Unix())},
 			":ecrRepoName": &types.AttributeValueMemberS{Value: server.ECRRepositoryName},
 			":ecrRepoURI":  &types.AttributeValueMemberS{Value: server.ECRRepositoryURI},

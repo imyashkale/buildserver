@@ -24,16 +24,16 @@ func (req *CreateDeploymentRequest) ToDomain() *Deployment {
 
 // DeploymentResponse represents the response structure for a single deployment
 type DeploymentResponse struct {
-	ServerId   string                          `json:"server_id"`
-	UserId     string                          `json:"user_id,omitempty"`
-	Branch     string                          `json:"branch"`
-	CommitHash string                          `json:"commit_hash"`
-	Status     string                          `json:"status"`
-	Stages     map[string]*BuildStageStatus    `json:"stages,omitempty"`
-	BuildLogs  []BuildLogEntry                 `json:"build_logs,omitempty"`
-	ImageURI   string                          `json:"image_uri,omitempty"`
-	CreatedAt  time.Time                       `json:"created_at"`
-	UpdatedAt  time.Time                       `json:"updated_at"`
+	ServerId   string                       `json:"server_id"`
+	UserId     string                       `json:"user_id,omitempty"`
+	Branch     string                       `json:"branch"`
+	CommitHash string                       `json:"commit_hash"`
+	Status     string                       `json:"status"`
+	Stages     map[string]*BuildStageStatus `json:"stages,omitempty"`
+	BuildLogs  []BuildLogEntry              `json:"build_logs,omitempty"`
+	ImageURI   string                       `json:"image_uri,omitempty"`
+	CreatedAt  time.Time                    `json:"created_at"`
+	UpdatedAt  time.Time                    `json:"updated_at"`
 }
 
 // DeploymentListResponse represents the response structure for listing deployments

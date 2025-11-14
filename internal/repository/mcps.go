@@ -16,9 +16,6 @@ var (
 // MCPRepository defines the interface for MCP server operations
 type MCPRepository interface {
 	Get(ctx context.Context, id string) (*models.MCPServer, error)
-	GetAll(ctx context.Context) ([]*models.MCPServer, error)
-	GetByID(ctx context.Context, id string) (*models.MCPServer, error)
-	GetByUserId(ctx context.Context, userId string) ([]*models.MCPServer, error)
 	Update(ctx context.Context, server *models.MCPServer) error
 }
 
@@ -37,21 +34,6 @@ func NewMCPRepository(db *database.MCPServer) MCPRepository {
 // Get retrieves an MCP server by ID
 func (r *dynamoMCPRepository) Get(ctx context.Context, id string) (*models.MCPServer, error) {
 	return r.db.GetMCP(ctx, id)
-}
-
-// GetAll retrieves all MCP servers
-func (r *dynamoMCPRepository) GetAll(ctx context.Context) ([]*models.MCPServer, error) {
-	return r.db.GetAllMCPs(ctx)
-}
-
-// GetByID retrieves an MCP server by ID (same as Get for compatibility)
-func (r *dynamoMCPRepository) GetByID(ctx context.Context, id string) (*models.MCPServer, error) {
-	return r.db.GetMCP(ctx, id)
-}
-
-// GetByUserId retrieves all MCP servers for a specific user
-func (r *dynamoMCPRepository) GetByUserId(ctx context.Context, userId string) ([]*models.MCPServer, error) {
-	return r.db.GetMCPsByUserId(ctx, userId)
 }
 
 // Update updates an existing MCP server
