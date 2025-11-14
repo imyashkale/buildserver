@@ -15,13 +15,11 @@ var (
 
 // MCPRepository defines the interface for MCP server operations
 type MCPRepository interface {
-	Create(ctx context.Context, server *models.MCPServer) error
 	Get(ctx context.Context, id string) (*models.MCPServer, error)
 	GetAll(ctx context.Context) ([]*models.MCPServer, error)
 	GetByID(ctx context.Context, id string) (*models.MCPServer, error)
 	GetByUserId(ctx context.Context, userId string) ([]*models.MCPServer, error)
 	Update(ctx context.Context, server *models.MCPServer) error
-	Delete(ctx context.Context, id string) error
 }
 
 // dynamoMCPRepository implements MCPRepository using DynamoDB
@@ -34,11 +32,6 @@ func NewMCPRepository(db *database.MCPServer) MCPRepository {
 	return &dynamoMCPRepository{
 		db: db,
 	}
-}
-
-// Create creates a new MCP server
-func (r *dynamoMCPRepository) Create(ctx context.Context, server *models.MCPServer) error {
-	return r.db.CreateMCP(ctx, server)
 }
 
 // Get retrieves an MCP server by ID
@@ -64,9 +57,4 @@ func (r *dynamoMCPRepository) GetByUserId(ctx context.Context, userId string) ([
 // Update updates an existing MCP server
 func (r *dynamoMCPRepository) Update(ctx context.Context, server *models.MCPServer) error {
 	return r.db.UpdateMCP(ctx, server)
-}
-
-// Delete deletes an MCP server by ID
-func (r *dynamoMCPRepository) Delete(ctx context.Context, id string) error {
-	return r.db.DeleteMCP(ctx, id)
 }

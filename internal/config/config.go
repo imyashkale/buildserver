@@ -59,8 +59,8 @@ func New() *Config {
 		AWSAccountID: os.Getenv("AWS_ACCOUNT_ID"),
 
 		// DynamoDB configuration
-		DynamoDBTableName:          getEnvOrDefault("DYNAMODB_TABLE_NAME", "mcp-servers"),
-		GitHubConnectionsTableName: getEnvOrDefault("GITHUB_CONNECTIONS_TABLE_NAME", "github-connections"),
+		DynamoDBTableName:          getEnvOrDefault("DYNAMODB_TABLE_NAME", "MCPServers"),
+		GitHubConnectionsTableName: getEnvOrDefault("GITHUB_CONNECTIONS_TABLE_NAME", "GitHubConnections"),
 		GitHubOAuthStatesTableName: getEnvOrDefault("GITHUB_OAUTH_STATES_TABLE_NAME", "github-oauth-states"),
 		DeploymentsTableName:       getEnvOrDefault("DYNAMODB_DEPLOYMENTS_TABLE", "deployments"),
 
